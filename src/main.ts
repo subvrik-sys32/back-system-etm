@@ -10,7 +10,7 @@ import {
   AppModule,
 } from "./app.module"
 
-async function bootstrap(){
+async function bootstrap() {
 
   const app =
     await NestFactory.create(
@@ -19,11 +19,16 @@ async function bootstrap(){
 
   app.enableCors({
 
-    origin:[
-      "http://localhost:3000",
-    ],
+    origin:
+      process.env.CORS_ORIGIN
+        ?.split(",")
+        .map(
+          origin => origin.trim(),
+        ) ?? [
+          "http://localhost:3000",
+        ],
 
-    credentials:true,
+    credentials: true,
 
   })
 
@@ -31,19 +36,28 @@ async function bootstrap(){
 
     new ValidationPipe({
 
-      whitelist:true,
+      whitelist: true,
 
-      transform:true,
+      transform: true,
 
-      forbidNonWhitelisted:true,
+      forbidNonWhitelisted: true,
 
     }),
 
   )
 
-  await app.listen(
+  const port =
+    Number(
+      process.env.PORT,
+    ) || 3001
 
-    3001,
+  await app.listen(
+    port,
+  )
+
+  console.log(
+
+    `🚀 Backend running on port ${port}`,
 
   )
 
