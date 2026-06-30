@@ -1,0 +1,81 @@
+export const rolePermissionsSeed = {
+
+  ADMIN: [
+    "PROJECT_CREATE",
+    "PROJECT_READ",
+    "PROJECT_UPDATE",
+    "PROJECT_DELETE",
+
+    "TASK_CREATE",
+    "TASK_READ",
+    "TASK_UPDATE",
+    "TASK_DELETE",
+
+    "WORKFLOW_READ",
+    "WORKFLOW_UPDATE",
+
+    "MASTER_DATA_READ",
+    "MASTER_DATA_UPDATE",
+
+    "USER_CREATE",
+    "USER_READ",
+    "USER_UPDATE",
+    "USER_DELETE",
+  ],
+
+  GERENCIA: [
+    "PROJECT_CREATE",
+    "PROJECT_READ",
+    "PROJECT_UPDATE",
+    "PROJECT_DELETE",
+
+    "TASK_CREATE",
+    "TASK_READ",
+    "TASK_UPDATE",
+    "TASK_DELETE",
+
+    "WORKFLOW_READ",
+    "WORKFLOW_UPDATE",
+
+    "MASTER_DATA_READ",
+  ],
+
+  PROJECT_MANAGER: [
+    "PROJECT_CREATE",
+    "PROJECT_READ",
+    "PROJECT_UPDATE",
+
+    "TASK_CREATE",
+    "TASK_READ",
+    "TASK_UPDATE",
+
+    "WORKFLOW_READ",
+    "WORKFLOW_UPDATE",
+
+    "MASTER_DATA_READ",
+  ],
+
+  SUPERVISOR: [
+    "PROJECT_READ",
+
+    "TASK_READ",
+    "TASK_UPDATE",
+
+    "WORKFLOW_READ",
+    "WORKFLOW_UPDATE",
+
+    "MASTER_DATA_READ",
+  ],
+
+  OPERARIO: [
+    "PROJECT_READ",
+
+    "TASK_READ",
+
+    "WORKFLOW_READ",
+    "WORKFLOW_UPDATE",
+
+    "MASTER_DATA_READ",
+  ],
+
+} as const

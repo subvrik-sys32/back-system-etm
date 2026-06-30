@@ -1,0 +1,24 @@
+export const permissionsSeed=[
+
+  "PROJECT_CREATE",
+  "PROJECT_READ",
+  "PROJECT_UPDATE",
+  "PROJECT_DELETE",
+
+  "TASK_CREATE",
+  "TASK_READ",
+  "TASK_UPDATE",
+  "TASK_DELETE",
+
+  "WORKFLOW_READ",
+  "WORKFLOW_UPDATE",
+
+  "MASTER_DATA_READ",
+  "MASTER_DATA_UPDATE",
+
+  "USER_CREATE",
+  "USER_READ",
+  "USER_UPDATE",
+  "USER_DELETE",
+
+]

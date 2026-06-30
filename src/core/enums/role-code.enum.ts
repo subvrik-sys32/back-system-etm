@@ -1,0 +1,13 @@
+export enum RoleCode {
+
+  ADMIN = "ADMIN",
+
+  GERENCIA = "GERENCIA",
+
+  PROJECT_MANAGER = "PROJECT_MANAGER",
+
+  SUPERVISOR = "SUPERVISOR",
+
+  OPERARIO = "OPERARIO",
+
+}

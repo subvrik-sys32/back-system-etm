@@ -1,0 +1,1 @@
+export type ProcessCode = "CT" | "PL" | "SD" | "PT" | "EN" | "DS"
