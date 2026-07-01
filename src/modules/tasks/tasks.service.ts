@@ -5,10 +5,14 @@ import { CreateTaskDto } from "./dto/create-task.dto"
 import { UpdateTaskDto } from "./dto/update-task.dto"
 import { ReorderTaskItemDto } from "./dto/reorder-task.dto"
 import { buildWorkflow, hasWorkflowStarted } from "@/modules/workflow/engine/rebuild-workflow"
+import { RealtimeService } from "@/modules/realtime/realtime.service"
 
 @Injectable()
 export class TasksService{
-  constructor(private readonly prisma:PrismaService){}
+  constructor(  
+    private readonly prisma:PrismaService,
+    private readonly realtime:RealtimeService,
+    ){}
 
   private readonly includeRelations={
     project:{
@@ -78,7 +82,8 @@ export class TasksService{
       }),
     ])
 
-    return this.prisma.task.create({
+    const task=
+      await this.prisma.task.create({
       data:{
         taskNumber:(lastTask?.taskNumber??0)+1,
         projectId:dto.projectId,
@@ -103,6 +108,16 @@ export class TasksService{
       },
       include:this.includeRelations,
     })
+
+    this.realtime.publish({
+      entity:"TASK",
+      action:"CREATED",
+      id:task.id,
+      payload:task,
+      excludeUserId:userId,
+    })
+
+    return task
   }
 
   async update(id:string,dto:UpdateTaskDto,userId:string){
@@ -153,40 +168,62 @@ export class TasksService{
       }
     })
 
-    return this.prisma.task.findUnique({
-      where:{ id },
-      relationLoadStrategy:"join",
-      include:this.includeRelations,
-    })
+    const task=
+      await this.prisma.task.findUnique({
+        where:{ id },
+        relationLoadStrategy:"join",
+        include:this.includeRelations,
+      })
+
+    if(task){
+      this.realtime.publish({
+        entity:"TASK",
+        action:"UPDATED",
+        id:task.id,
+        payload:task,
+        excludeUserId:userId,
+      })
+    }
+    return task
   }
 
   async reorder(
-    items:ReorderTaskItemDto[],
+    items: ReorderTaskItemDto[],
+    userId:string,
   ){
-
     await this.prisma.$transaction(
-
       items.map(
         item=>
-
           this.prisma.task.update({
-
             where:{
               id:item.id,
             },
-
             data:{
               position:item.position,
             },
-
           }),
-
       ),
-
     )
 
-    return this.findAll()
+    const tasks=
+      await this.findAll()
 
+    this.realtime.publish({
+      entity:"TASK",
+      action:"REORDERED",
+      id:"bulk",
+      payload:tasks,
+      excludeUserId:userId,
+    })
+
+    this.realtime.publish({
+      entity:"PROCESS",
+      action:"UPDATED",
+      id:"bulk",
+      payload:tasks,
+      excludeUserId:userId,
+    })
+    return tasks
   }
 
   async remove(id:string,userId:string){
@@ -199,12 +236,30 @@ export class TasksService{
       throw new NotFoundException("Task not found")
     }
 
-    return this.prisma.task.update({
-      where:{ id },
-      data:{
-        deletedAt:new Date(),
-        updatedById:userId,
-      },
+    const task=
+      await this.prisma.task.update({
+        where:{ id },
+        data:{
+          deletedAt:new Date(),
+          updatedById:userId,
+        },
+
+      })
+
+    this.realtime.publish({
+      entity:"TASK",
+      action:"DELETED",
+      id,
+      excludeUserId:userId,
     })
+
+    this.realtime.publish({
+      entity:"PROCESS",
+      action:"UPDATED",
+      id,
+      excludeUserId:userId,
+    })
+
+    return task
   }
 }

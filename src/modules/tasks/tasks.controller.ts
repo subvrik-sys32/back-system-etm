@@ -115,10 +115,14 @@ export class TasksController {
     @Body()
     dto:ReorderTaskDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.tasksService.reorder(
       dto.items,
+      user.id,
     )
 
   }

@@ -34,6 +34,14 @@ import {
 } from "@/shared/decorators/permissions.decorator"
 
 import {
+  CurrentUser,
+} from "@/shared/decorators/current-user.decorator"
+
+import type {
+  CurrentUserType,
+} from "@/shared/types/current-user.types"
+
+import {
   PermissionCode,
 } from "@/core/enums/permission-code.enum"
 
@@ -98,10 +106,14 @@ export class UsersController {
   create(
     @Body()
     dto: CreateUserDto,
+
+    @CurrentUser()
+    user: CurrentUserType,
   ) {
 
     return this.usersService.create(
       dto,
+      user.id,
     )
 
   }
@@ -120,11 +132,15 @@ export class UsersController {
 
     @Body()
     dto: UpdateUserDto,
+
+    @CurrentUser()
+    user: CurrentUserType,
   ) {
 
     return this.usersService.update(
       id,
       dto,
+      user.id,
     )
 
   }
@@ -140,10 +156,14 @@ export class UsersController {
   remove(
     @Param("id")
     id: string,
+
+    @CurrentUser()
+    user: CurrentUserType,
   ) {
 
     return this.usersService.remove(
       id,
+      user.id,
     )
 
   }

@@ -6,17 +6,29 @@ export async function getStepForUpdate(
   id:string,
 ){
 
-  const step=await prisma.workflowStep.findUnique({
-    where:{ id },
-    select:{
-      id:true,
-    },
-  })
+  const step=
+    await prisma.workflowStep.findUnique({
+
+      where:{ id },
+
+      select:{
+
+        id:true,
+
+        taskId:true,
+
+      },
+
+    })
 
   if(!step){
+
     throw new NotFoundException(
+
       "Workflow step not found",
+
     )
+
   }
 
   return step

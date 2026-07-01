@@ -1,6 +1,14 @@
-import { Prisma } from "@prisma/client"
+import {
+  NotFoundException,
+} from "@nestjs/common"
 
-import { PrismaService } from "@/infra/database/prisma/prisma.service"
+import {
+  Prisma,
+} from "@prisma/client"
+
+import {
+  PrismaService,
+} from "@/infra/database/prisma/prisma.service"
 
 const includeTask={
 
@@ -44,16 +52,27 @@ export async function getTaskWithRelations(
   taskId:string,
 ){
 
-  return prisma.task.findUnique({
+  const task=
+    await prisma.task.findUnique({
 
-    where:{
-      id:taskId,
-    },
+      where:{
+        id:taskId,
+      },
 
-    relationLoadStrategy:"join",
+      relationLoadStrategy:"join",
 
-    include:includeTask,
+      include:includeTask,
 
-  })
+    })
+
+  if(!task){
+
+    throw new NotFoundException(
+      "Task not found",
+    )
+
+  }
+
+  return task
 
 }

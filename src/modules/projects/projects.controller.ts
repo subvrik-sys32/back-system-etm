@@ -117,10 +117,14 @@ export class ProjectsController{
     @Body()
     dto:ReorderProjectDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.projectsService.reorder(
       dto.items,
+      user.id,
     )
 
   }

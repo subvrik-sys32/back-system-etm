@@ -86,6 +86,10 @@ import {
   CodeGeneratorModule,
 } from "@/shared/code-generator/code-generator.module"
 
+import {
+  RealtimeModule,
+} from "@/modules/realtime/realtime.module"
+
 @Module({
 
   imports:[
@@ -131,6 +135,8 @@ import {
     WorkflowModule,
 
     CodeGeneratorModule,
+
+    RealtimeModule,
 
   ],
 

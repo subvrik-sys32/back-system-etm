@@ -18,25 +18,43 @@ async function bootstrap() {
     )
 
   app.enableCors({
-    origin: (origin, callback) => {
 
-      const allowed = [
+    origin:(origin,callback)=>{
+
+      const allowed=[
         "http://localhost:3000",
         "https://front-system-etm.vercel.app",
       ]
 
-      if (
-        !origin ||
-        allowed.includes(origin) ||
+      if(
+        !origin||
+        allowed.includes(origin)||
         origin.endsWith(".vercel.app")
-      ) {
-        return callback(null, true)
+      ){
+        return callback(null,true)
       }
 
-      callback(new Error("Not allowed by CORS"))
+      callback(
+        new Error("Not allowed by CORS"),
+      )
 
     },
-    credentials: true,
+
+    credentials:true,
+
+    allowedHeaders:[
+      "Authorization",
+      "Content-Type",
+    ],
+
+    methods:[
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
   })
 
   app.useGlobalPipes(
