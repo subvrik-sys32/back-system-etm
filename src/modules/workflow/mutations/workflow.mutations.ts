@@ -5,6 +5,18 @@ import {
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 
+const operatorSelect={
+
+  id:true,
+  username:true,
+  name:true,
+  email:true,
+  icon:true,
+  color:true,
+  active:true,
+
+} satisfies Prisma.UserSelect
+
 export async function updateWorkflowStep(
   prisma:PrismaService,
   id:string,
@@ -19,7 +31,9 @@ export async function updateWorkflowStep(
       data,
 
       include:{
-        operator:true,
+        operator:{
+          select:operatorSelect,
+        },
       },
 
     })
@@ -29,7 +43,9 @@ export async function updateWorkflowStep(
     taskId:
       workflowStep.taskId,
 
-    workflowStep,
+    updated:[
+      workflowStep,
+    ],
 
   }
 
@@ -56,33 +72,46 @@ export async function reviewTransaction(
           },
 
           include:{
-            operator:true,
+            operator:{
+              select:operatorSelect,
+            },
           },
 
         })
 
-      if(nextStepId){
+      const nextStep=
 
-        await tx.workflowStep.update({
+        nextStepId
 
-          where:{
-            id:nextStepId,
-          },
+          ?await tx.workflowStep.update({
 
-          data:{
-            status:WorkflowStatus.PENDING,
-          },
+              where:{
+                id:nextStepId,
+              },
 
-        })
+              data:{
+                status:WorkflowStatus.PENDING,
+              },
 
-      }
+              include:{
+                operator:{
+                  select:operatorSelect,
+                },
+              },
+
+            })
+
+          :null
 
       return{
 
         taskId:
           workflowStep.taskId,
 
-        workflowStep,
+        updated:
+          nextStep
+            ?[workflowStep,nextStep]
+            :[workflowStep],
 
       }
 
@@ -114,33 +143,46 @@ export async function reopenTransaction(
           },
 
           include:{
-            operator:true,
+            operator:{
+              select:operatorSelect,
+            },
           },
 
         })
 
-      if(nextStepId){
+      const nextStep=
 
-        await tx.workflowStep.update({
+        nextStepId
 
-          where:{
-            id:nextStepId,
-          },
+          ?await tx.workflowStep.update({
 
-          data:{
-            status:WorkflowStatus.QUEUE,
-          },
+              where:{
+                id:nextStepId,
+              },
 
-        })
+              data:{
+                status:WorkflowStatus.QUEUE,
+              },
 
-      }
+              include:{
+                operator:{
+                  select:operatorSelect,
+                },
+              },
+
+            })
+
+          :null
 
       return{
 
         taskId:
           workflowStep.taskId,
 
-        workflowStep,
+        updated:
+          nextStep
+            ?[workflowStep,nextStep]
+            :[workflowStep],
 
       }
 

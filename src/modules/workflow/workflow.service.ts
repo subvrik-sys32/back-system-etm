@@ -7,8 +7,6 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { WorkflowActionDto } from "./dto/workflow-action.dto"
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto"
 
-import { getTaskWithRelations } from "./queries/workflow-task.query"
-
 import {
   getStepForComplete,
   getStepForReview,
@@ -17,7 +15,11 @@ import {
   getStepForUpdate,
 } from "./queries/workflow.queries"
 
-import { updateWorkflowStep } from "./mutations/workflow.mutations"
+import {
+  updateWorkflowStep,
+  reviewTransaction,
+  reopenTransaction,
+} from "./mutations/workflow.mutations"
 
 import {
   validateCompleted,
@@ -29,6 +31,11 @@ import {
   validateReopen,
 } from "./validators/workflow.validators"
 
+type WorkflowDelta={
+  taskId:string
+  updated:unknown[]
+}
+
 @Injectable()
 export class WorkflowService {
 
@@ -37,87 +44,125 @@ export class WorkflowService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  // Helper único: siempre trae el task actualizado, publica realtime,
-  // y devuelve el mismo shape que espera el frontend.
-  private async publishTask(taskId: string, userId: string) {
+  // Publica el delta ya calculado en memoria — sin ninguna
+  // consulta adicional a la base de datos.
+  private publishDelta(
+    { taskId, updated }: WorkflowDelta,
+    userId: string,
+  ){
 
-    const task = await getTaskWithRelations(this.prisma, taskId)
+    const payload = { taskId, updated }
 
     this.realtime.publish({
       entity: "WORKFLOW",
       action: "UPDATED",
-      id: task.id,
-      payload: task,
+      id: taskId,
+      payload,
       excludeUserId: userId,
     })
 
     this.realtime.publish({
       entity: "PROCESS",
       action: "UPDATED",
-      id: task.id,
-      payload: task,
+      id: taskId,
+      payload,
       excludeUserId: userId,
     })
 
-    return { taskId, task }
+    return payload
+
+  }
+
+  // Helper único para start/pause/resume: mismo patrón
+  // (SELECT liviano -> validar -> UPDATE -> publish), solo cambia
+  // el status esperado, el status destino, y datos extra opcionales.
+  private async transitionStatus(
+    id: string,
+    userId: string,
+    expected: (status: WorkflowStatus) => void,
+    data: (step: {
+      status: WorkflowStatus
+      operatorId: string | null
+      startedAt: Date | null
+    }) => Record<string, unknown>,
+  ) {
+
+    const step = await getStepForStart(this.prisma, id)
+
+    expected(step.status)
+
+    const result = await updateWorkflowStep(
+      this.prisma,
+      id,
+      data(step),
+    )
+
+    return this.publishDelta(result, userId)
+
   }
 
   async update(id: string, dto: UpdateWorkflowStepDto, userId: string) {
 
-    const step = await getStepForUpdate(this.prisma, id)
+    await getStepForUpdate(this.prisma, id)
 
-    await updateWorkflowStep(this.prisma, id, {
+    const result = await updateWorkflowStep(this.prisma, id, {
       ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
       ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
       ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
       ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
     })
 
-    return this.publishTask(step.taskId, userId)
+    return this.publishDelta(result, userId)
+
   }
 
   async start(id: string, userId: string) {
 
-    const step = await getStepForStart(this.prisma, id)
+    return this.transitionStatus(
+      id,
+      userId,
 
-    validatePending(step.status)
-    validateOperatorAssigned(
-      step.operatorId,
-      "Debe asignar un operario antes de iniciar el proceso.",
+      status => {
+        validatePending(status)
+      },
+
+      step => {
+
+        validateOperatorAssigned(
+          step.operatorId,
+          "Debe asignar un operario antes de iniciar el proceso.",
+        )
+
+        return {
+          status: WorkflowStatus.PROGRESS,
+          startedAt: step.startedAt ?? new Date(),
+        }
+
+      },
     )
 
-    await updateWorkflowStep(this.prisma, id, {
-      status: WorkflowStatus.PROGRESS,
-      startedAt: step.startedAt ?? new Date(),
-    })
-
-    return this.publishTask(step.taskId, userId)
   }
 
   async pause(id: string, userId: string) {
 
-    const step = await getStepForStart(this.prisma, id)
+    return this.transitionStatus(
+      id,
+      userId,
+      status => validateProgress(status),
+      () => ({ status: WorkflowStatus.PAUSED }),
+    )
 
-    validateProgress(step.status)
-
-    await updateWorkflowStep(this.prisma, id, {
-      status: WorkflowStatus.PAUSED,
-    })
-
-    return this.publishTask(step.taskId, userId)
   }
 
   async resume(id: string, userId: string) {
 
-    const step = await getStepForStart(this.prisma, id)
+    return this.transitionStatus(
+      id,
+      userId,
+      status => validatePaused(status),
+      () => ({ status: WorkflowStatus.PROGRESS }),
+    )
 
-    validatePaused(step.status)
-
-    await updateWorkflowStep(this.prisma, id, {
-      status: WorkflowStatus.PROGRESS,
-    })
-
-    return this.publishTask(step.taskId, userId)
   }
 
   async complete(id: string, dto: WorkflowActionDto, userId: string) {
@@ -128,7 +173,7 @@ export class WorkflowService {
     validateOperatorAssigned(step.operatorId, "Debe registrar un operario.")
     validateCompletePayload(step.processCode, dto)
 
-    await updateWorkflowStep(this.prisma, id, {
+    const result = await updateWorkflowStep(this.prisma, id, {
       status: WorkflowStatus.COMPLETED,
       completedAt: new Date(),
       piecesOutput: dto.piecesOutput ?? null,
@@ -136,7 +181,8 @@ export class WorkflowService {
       paintKgReal: dto.paintKgReal ?? null,
     })
 
-    return this.publishTask(step.taskId, userId)
+    return this.publishDelta(result, userId)
+
   }
 
   async review(id: string, userId: string) {
@@ -149,26 +195,19 @@ export class WorkflowService {
       item => item.order === step.order + 1,
     )
 
-    await this.prisma.$transaction(async tx => {
+    const eligibleNextId =
+      nextStep && nextStep.status === WorkflowStatus.QUEUE
+        ? nextStep.id
+        : undefined
 
-      await tx.workflowStep.update({
-        where: { id },
-        data: {
-          status: WorkflowStatus.REVIEWED,
-          reviewedAt: new Date(),
-        },
-      })
+    const result = await reviewTransaction(
+      this.prisma,
+      id,
+      eligibleNextId,
+    )
 
-      if (nextStep && nextStep.status === WorkflowStatus.QUEUE) {
-        await tx.workflowStep.update({
-          where: { id: nextStep.id },
-          data: { status: WorkflowStatus.PENDING },
-        })
-      }
+    return this.publishDelta(result, userId)
 
-    })
-
-    return this.publishTask(step.taskId, userId)
   }
 
   async reopen(id: string, userId: string) {
@@ -181,31 +220,21 @@ export class WorkflowService {
       item => item.order === step.order + 1,
     )
 
-    await this.prisma.$transaction(async tx => {
+    const eligibleNextId =
+      nextStep &&
+      (nextStep.status === WorkflowStatus.PENDING ||
+        nextStep.status === WorkflowStatus.QUEUE)
+        ? nextStep.id
+        : undefined
 
-      await tx.workflowStep.update({
-        where: { id },
-        data: {
-          status: WorkflowStatus.PROGRESS,
-          completedAt: null,
-          reviewedAt: null,
-        },
-      })
+    const result = await reopenTransaction(
+      this.prisma,
+      id,
+      eligibleNextId,
+    )
 
-      if (
-        nextStep &&
-        (nextStep.status === WorkflowStatus.PENDING ||
-          nextStep.status === WorkflowStatus.QUEUE)
-      ) {
-        await tx.workflowStep.update({
-          where: { id: nextStep.id },
-          data: { status: WorkflowStatus.QUEUE },
-        })
-      }
+    return this.publishDelta(result, userId)
 
-    })
-
-    return this.publishTask(step.taskId, userId)
   }
 
 }

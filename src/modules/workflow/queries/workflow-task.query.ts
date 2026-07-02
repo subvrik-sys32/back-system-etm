@@ -1,53 +1,7 @@
-import {
-  NotFoundException,
-} from "@nestjs/common"
+import { NotFoundException } from "@nestjs/common"
+import { PrismaService } from "@/infra/database/prisma/prisma.service"
 
-import {
-  Prisma,
-} from "@prisma/client"
-
-import {
-  PrismaService,
-} from "@/infra/database/prisma/prisma.service"
-
-const includeTask={
-
-  project:{
-    include:{
-      client:true,
-      stage:true,
-      status:true,
-      pm:{
-        select:{
-          id:true,
-          username:true,
-          name:true,
-          email:true,
-          active:true,
-          createdAt:true,
-          updatedAt:true,
-        },
-      },
-    },
-  },
-
-  priority:true,
-  material:true,
-  thickness:true,
-  color:true,
-
-  workflowSteps:{
-    include:{
-      operator:true,
-    },
-    orderBy:{
-      order:"asc" as const,
-    },
-  },
-
-} satisfies Prisma.TaskInclude
-
-export async function getTaskWithRelations(
+export async function getTaskWorkflowSteps(
   prisma:PrismaService,
   taskId:string,
 ){
@@ -59,9 +13,20 @@ export async function getTaskWithRelations(
         id:taskId,
       },
 
-      relationLoadStrategy:"join",
+      select:{
 
-      include:includeTask,
+        id:true,
+
+        workflowSteps:{
+          include:{
+            operator:true,
+          },
+          orderBy:{
+            order:"asc" as const,
+          },
+        },
+
+      },
 
     })
 

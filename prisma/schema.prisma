@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["relationJoins"]
@@ -10,8 +5,247 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url        = env("DATABASE_URL")
-  directUrl  = env("DIRECT_URL")
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  active      Boolean          @default(true)
+  code        String           @unique
+  color       String
+  icon        String
+  permissions RolePermission[]
+  users       User[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  color     String
+  icon      String
+  projects  Project[]
+}
+
+model User {
+  id              String         @id @default(uuid())
+  name            String
+  email           String         @unique
+  passwordHash    String
+  roleId          String
+  active          Boolean        @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  username        String?        @unique
+  color           String
+  icon            String
+  auditLogs       AuditLog[]
+  createdProjects Project[]      @relation("ProjectCreatedBy")
+  managedProjects Project[]      @relation("ProjectPm")
+  updatedProjects Project[]      @relation("ProjectUpdatedBy")
+  createdTasks    Task[]         @relation("TaskCreatedBy")
+  updatedTasks    Task[]         @relation("TaskUpdatedBy")
+  role            Role           @relation(fields: [roleId], references: [id])
+  workflowSteps   WorkflowStep[]
+}
+
+model Priority {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  color     String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  icon      String
+  tasks     Task[]
+}
+
+model Material {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  color     String
+  icon      String
+  tasks     Task[]
+}
+
+model Thickness {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  color     String
+  icon      String
+  tasks     Task[]
+}
+
+model Color {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  icon      String
+  color     String
+  tasks     Task[]
+}
+
+model Stage {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  color     String
+  icon      String
+  projects  Project[]
+}
+
+model Status {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  color     String
+  icon      String
+  projects  Project[]
+}
+
+model Project {
+  id           String    @id @default(uuid())
+  sequence     Int       @unique
+  projectCode  String
+  name         String
+  clientId     String
+  deliveryDate DateTime?
+  position     Int       @default(0)
+  createdById  String
+  updatedById  String
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  pmId         String
+  stageId      String
+  statusId     String
+  client       Client    @relation(fields: [clientId], references: [id])
+  createdBy    User      @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  pm           User      @relation("ProjectPm", fields: [pmId], references: [id])
+  stage        Stage     @relation(fields: [stageId], references: [id])
+  status       Status    @relation(fields: [statusId], references: [id])
+  updatedBy    User      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
+  tasks        Task[]
+
+  @@index([clientId])
+  @@index([pmId])
+}
+
+model Task {
+  id            String         @id @default(uuid())
+  taskNumber    Int            @unique
+  projectId     String
+  reference     String
+  pieces        Int
+  lotNumber     Int
+  paintKg       Float
+  priorityId    String
+  materialId    String
+  thicknessId   String
+  colorId       String?
+  plRt          String?
+  deliveryDate  DateTime?
+  position      Int            @default(0)
+  createdById   String
+  updatedById   String
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  assemblyCount Int
+  route         ProcessCode[]
+  color         Color?         @relation(fields: [colorId], references: [id])
+  createdBy     User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  material      Material       @relation(fields: [materialId], references: [id])
+  priority      Priority       @relation(fields: [priorityId], references: [id])
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  thickness     Thickness      @relation(fields: [thicknessId], references: [id])
+  updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  workflowSteps WorkflowStep[]
+}
+
+model WorkflowStep {
+  id           String         @id @default(uuid())
+  taskId       String
+  processCode  ProcessCode
+  status       WorkflowStatus
+  order        Int
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  paintKgReal  Float?
+  piecesOutput Int?
+  plRtReal     Float?
+  reviewedAt   DateTime?
+  operatorId   String?
+  operator     User?          @relation(fields: [operatorId], references: [id])
+  task         Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, processCode])
+  @@index([taskId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  module    String
+  entityId  String
+  action    String
+  oldValue  Json?
+  newValue  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 enum ProcessCode {
@@ -30,352 +264,4 @@ enum WorkflowStatus {
   PAUSED
   COMPLETED
   REVIEWED
-}
-
-model Role {
-  id String @id @default(uuid())
-
-  code String @unique
-
-  name String
-
-  icon String
-
-  color String
-
-  active Boolean @default(true)
-
-  users User[]
-
-  permissions RolePermission[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Permission {
-  id          String  @id @default(uuid())
-  code        String  @unique
-  description String?
-
-  roles RolePermission[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model RolePermission {
-  roleId       String
-  permissionId String
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@id([roleId, permissionId])
-}
-
-model Client {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  projects Project[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model User {
-  id String @id @default(uuid())
-
-  username String? @unique
-
-  name         String
-  email        String @unique
-  passwordHash String
-
-  icon  String
-  color String
-
-  roleId String
-  role   Role   @relation(fields: [roleId], references: [id])
-
-  active Boolean @default(true)
-
-  createdProjects Project[] @relation("ProjectCreatedBy")
-  updatedProjects Project[] @relation("ProjectUpdatedBy")
-  managedProjects Project[] @relation("ProjectPm")
-
-  createdTasks Task[] @relation("TaskCreatedBy")
-  updatedTasks Task[] @relation("TaskUpdatedBy")
-
-  workflowSteps WorkflowStep[]
-
-  auditLogs AuditLog[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Priority {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  tasks Task[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Material {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  tasks Task[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Thickness {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  tasks Task[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Color {
-  id String @id @default(uuid())
-
-  code String @unique
-
-  name String
-
-  icon String
-
-  color String
-
-  active Boolean @default(true)
-
-  tasks Task[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Stage {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  projects Project[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Status {
-  id String @id @default(uuid())
-
-  code String @unique
-  name String
-
-  icon  String
-  color String
-
-  active Boolean @default(true)
-
-  projects Project[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Project {
-  id String @id @default(uuid())
-
-  sequence    Int    @unique
-  projectCode String
-
-  name String
-
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-
-  pmId String
-  pm   User   @relation("ProjectPm", fields: [pmId], references: [id])
-
-  stageId String
-  stage   Stage  @relation(fields: [stageId], references: [id])
-
-  statusId String
-  status   Status @relation(fields: [statusId], references: [id])
-
-  deliveryDate DateTime?
-
-  position Int @default(0)
-
-  createdById String
-  updatedById String
-
-  createdBy User @relation("ProjectCreatedBy", fields: [createdById], references: [id])
-  updatedBy User @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
-
-  tasks Task[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([clientId])
-  @@index([pmId])
-}
-
-model Task {
-  id String @id @default(uuid())
-
-  taskNumber Int @unique
-
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  reference String
-
-  pieces    Int
-  lotNumber Int
-
-  assemblyCount Int
-  paintKg       Float
-
-  route ProcessCode[]
-
-  priorityId String
-  priority   Priority @relation(fields: [priorityId], references: [id])
-
-  materialId String
-  material   Material @relation(fields: [materialId], references: [id])
-
-  thicknessId String
-  thickness   Thickness @relation(fields: [thicknessId], references: [id])
-
-  colorId String?
-  color   Color?  @relation(fields: [colorId], references: [id])
-
-  plRt String?
-
-  deliveryDate DateTime?
-
-  position Int @default(0)
-
-  createdById String
-  updatedById String
-
-  createdBy User @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  updatedBy User @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
-
-  workflowSteps WorkflowStep[]
-
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model WorkflowStep {
-  id String @id @default(uuid())
-
-  taskId String
-  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  processCode ProcessCode
-  status      WorkflowStatus
-
-  order Int
-
-  operatorId String?
-  operator   User?   @relation(fields: [operatorId], references: [id])
-
-  startedAt   DateTime?
-  completedAt DateTime?
-  reviewedAt  DateTime?
-
-  piecesOutput Int?
-  plRtReal     Float?
-  paintKgReal  Float?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([taskId, processCode])
-  @@index([taskId])
-}
-
-model AuditLog {
-  id String @id @default(uuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  module   String
-  entityId String
-
-  action String
-
-  oldValue Json?
-  newValue Json?
-
-  createdAt DateTime @default(now())
 }

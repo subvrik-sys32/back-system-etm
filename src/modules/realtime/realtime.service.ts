@@ -51,10 +51,6 @@ export class RealtimeService {
 
     const subscription = subject.subscribe({
       next: (event) => {
-        // 🔍 INSTRUMENTACIÓN
-        this.logger.debug(
-          `[SUBJECT.next] -> user=${userId} connection=${connectionId} entity=${event.entity} action=${event.action} id=${event.id ?? '-'}`,
-        );
         this.writeEvent(response, 'message', event);
       },
       error: (err) =>
@@ -127,12 +123,6 @@ export class RealtimeService {
   }
 
   publish<T>(options: PublishOptions<T>): void {
-    // 🔍 INSTRUMENTACIÓN: confirma que publish() se está llamando y con qué
-    this.logger.log(
-      `[PUBLISH] entity=${options.entity} action=${options.action} id=${options.id ?? '-'} ` +
-        `excludeUserId=${options.excludeUserId ?? '-'} targetUserIds=${JSON.stringify(options.targetUserIds ?? null)} ` +
-        `targetRoles=${JSON.stringify(options.targetRoles ?? null)} payload=${JSON.stringify(options.payload)}`,
-    );
 
     const event: RealtimeEvent<T> = {
       entity: options.entity,
@@ -142,11 +132,6 @@ export class RealtimeService {
       timestamp: new Date().toISOString(),
       originUserId: options.excludeUserId,
     };
-
-    // 🔍 INSTRUMENTACIÓN: cuántos usuarios/conexiones hay en el hub en este momento
-    this.logger.debug(
-      `[PUBLISH] usuarios conectados actualmente: ${[...this.connections.keys()].join(', ') || '(ninguno)'}`,
-    );
 
     let matchedUsers = 0;
     let matchedConnections = 0;
@@ -164,11 +149,6 @@ export class RealtimeService {
         connection.subject.next(event);
       }
     }
-
-    // 🔍 INSTRUMENTACIÓN: si esto da 0, el evento no llegó a NADIE
-    this.logger.log(
-      `[PUBLISH] resultado: ${matchedUsers} usuario(s) / ${matchedConnections} conexión(es) recibieron el evento`,
-    );
   }
 
   publishToUser<T>(
