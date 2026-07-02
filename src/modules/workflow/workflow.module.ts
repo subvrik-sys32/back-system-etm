@@ -10,12 +10,17 @@ import {
   WorkflowService,
 } from "./workflow.service"
 
+import {
+  OperatorCacheService,
+} from "./services/operator-cache.service"
+
 @Module({
-  controllers:[
+  controllers: [
     WorkflowController,
   ],
-  providers:[
+  providers: [
     WorkflowService,
+    OperatorCacheService,
   ],
 })
 export class WorkflowModule {}

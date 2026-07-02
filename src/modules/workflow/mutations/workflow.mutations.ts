@@ -5,46 +5,51 @@ import {
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 
-const operatorSelect={
+import { OperatorCacheService } from "../services/operator-cache.service"
+import { OperatorLite } from "../constants/operator-select.constant"
 
-  id:true,
-  username:true,
-  name:true,
-  email:true,
-  icon:true,
-  color:true,
-  active:true,
-
-} satisfies Prisma.UserSelect
+type WorkflowStepDelta = Prisma.WorkflowStepGetPayload<{}> & {
+  operator?: OperatorLite | null
+}
 
 export async function updateWorkflowStep(
-  prisma:PrismaService,
-  id:string,
-  data:Prisma.WorkflowStepUpdateInput,
-){
+  prisma: PrismaService,
+  operatorCache: OperatorCacheService,
+  id: string,
+  data: Prisma.WorkflowStepUpdateInput,
+) {
 
-  const workflowStep=
-    await prisma.workflowStep.update({
+  const workflowStep = await prisma.workflowStep.update({
 
-      where:{ id },
+    where: { id },
 
-      data,
+    data,
 
-      include:{
-        operator:{
-          select:operatorSelect,
-        },
-      },
+  })
 
-    })
+  const touchedOperator = "operatorId" in data
 
-  return{
+  let delta: WorkflowStepDelta = workflowStep
 
-    taskId:
-      workflowStep.taskId,
+  if (touchedOperator) {
 
-    updated:[
-      workflowStep,
+    const operator = workflowStep.operatorId
+      ? await operatorCache.get(workflowStep.operatorId)
+      : null
+
+    delta = {
+      ...workflowStep,
+      operator,
+    }
+
+  }
+
+  return {
+
+    taskId: workflowStep.taskId,
+
+    updated: [
+      delta,
     ],
 
   }
@@ -52,66 +57,56 @@ export async function updateWorkflowStep(
 }
 
 export async function reviewTransaction(
-  prisma:PrismaService,
-  id:string,
-  nextStepId?:string,
-){
+  prisma: PrismaService,
+  id: string,
+  nextStepId?: string,
+) {
 
   return prisma.$transaction(
 
-    async tx=>{
+    async tx => {
 
-      const workflowStep=
-        await tx.workflowStep.update({
+      const workflowStep = await tx.workflowStep.update({
 
-          where:{ id },
+        where: { id },
 
-          data:{
-            status:WorkflowStatus.REVIEWED,
-            reviewedAt:new Date(),
-          },
+        data: {
+          status: WorkflowStatus.REVIEWED,
+          reviewedAt: new Date(),
+        },
 
-          include:{
-            operator:{
-              select:operatorSelect,
+      })
+
+      const nextStep = nextStepId
+
+        ? await tx.workflowStep.update({
+
+            where: {
+              id: nextStepId,
             },
-          },
 
-        })
+            data: {
+              status: WorkflowStatus.PENDING,
+            },
 
-      const nextStep=
+          })
 
-        nextStepId
+        : null
 
-          ?await tx.workflowStep.update({
+      return {
 
-              where:{
-                id:nextStepId,
-              },
+        taskId: workflowStep.taskId,
 
-              data:{
-                status:WorkflowStatus.PENDING,
-              },
+        updated: nextStep
 
-              include:{
-                operator:{
-                  select:operatorSelect,
-                },
-              },
+          ? [
+              workflowStep,
+              nextStep,
+            ]
 
-            })
-
-          :null
-
-      return{
-
-        taskId:
-          workflowStep.taskId,
-
-        updated:
-          nextStep
-            ?[workflowStep,nextStep]
-            :[workflowStep],
+          : [
+              workflowStep,
+            ],
 
       }
 
@@ -122,67 +117,57 @@ export async function reviewTransaction(
 }
 
 export async function reopenTransaction(
-  prisma:PrismaService,
-  id:string,
-  nextStepId?:string,
-){
+  prisma: PrismaService,
+  id: string,
+  nextStepId?: string,
+) {
 
   return prisma.$transaction(
 
-    async tx=>{
+    async tx => {
 
-      const workflowStep=
-        await tx.workflowStep.update({
+      const workflowStep = await tx.workflowStep.update({
 
-          where:{ id },
+        where: { id },
 
-          data:{
-            status:WorkflowStatus.PROGRESS,
-            completedAt:null,
-            reviewedAt:null,
-          },
+        data: {
+          status: WorkflowStatus.PROGRESS,
+          completedAt: null,
+          reviewedAt: null,
+        },
 
-          include:{
-            operator:{
-              select:operatorSelect,
+      })
+
+      const nextStep = nextStepId
+
+        ? await tx.workflowStep.update({
+
+            where: {
+              id: nextStepId,
             },
-          },
 
-        })
+            data: {
+              status: WorkflowStatus.QUEUE,
+            },
 
-      const nextStep=
+          })
 
-        nextStepId
+        : null
 
-          ?await tx.workflowStep.update({
+      return {
 
-              where:{
-                id:nextStepId,
-              },
+        taskId: workflowStep.taskId,
 
-              data:{
-                status:WorkflowStatus.QUEUE,
-              },
+        updated: nextStep
 
-              include:{
-                operator:{
-                  select:operatorSelect,
-                },
-              },
+          ? [
+              workflowStep,
+              nextStep,
+            ]
 
-            })
-
-          :null
-
-      return{
-
-        taskId:
-          workflowStep.taskId,
-
-        updated:
-          nextStep
-            ?[workflowStep,nextStep]
-            :[workflowStep],
+          : [
+              workflowStep,
+            ],
 
       }
 

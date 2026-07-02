@@ -7,6 +7,8 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { WorkflowActionDto } from "./dto/workflow-action.dto"
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto"
 
+import { OperatorCacheService } from "./services/operator-cache.service"
+
 import {
   getStepForComplete,
   getStepForReview,
@@ -31,9 +33,9 @@ import {
   validateReopen,
 } from "./validators/workflow.validators"
 
-type WorkflowDelta={
-  taskId:string
-  updated:unknown[]
+type WorkflowDelta = {
+  taskId: string
+  updated: unknown[]
 }
 
 @Injectable()
@@ -42,14 +44,13 @@ export class WorkflowService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly operatorCache: OperatorCacheService,
   ) {}
 
-  // Publica el delta ya calculado en memoria — sin ninguna
-  // consulta adicional a la base de datos.
   private publishDelta(
     { taskId, updated }: WorkflowDelta,
     userId: string,
-  ){
+  ) {
 
     const payload = { taskId, updated }
 
@@ -73,9 +74,6 @@ export class WorkflowService {
 
   }
 
-  // Helper único para start/pause/resume: mismo patrón
-  // (SELECT liviano -> validar -> UPDATE -> publish), solo cambia
-  // el status esperado, el status destino, y datos extra opcionales.
   private async transitionStatus(
     id: string,
     userId: string,
@@ -87,39 +85,68 @@ export class WorkflowService {
     }) => Record<string, unknown>,
   ) {
 
-    const step = await getStepForStart(this.prisma, id)
+    const step = await getStepForStart(
+      this.prisma,
+      id,
+    )
 
     expected(step.status)
 
+    const payload = data(step)
+
     const result = await updateWorkflowStep(
       this.prisma,
+      this.operatorCache,
       id,
-      data(step),
+      payload,
     )
 
-    return this.publishDelta(result, userId)
+    return this.publishDelta(
+      result,
+      userId,
+    )
 
   }
 
-  async update(id: string, dto: UpdateWorkflowStepDto, userId: string) {
+  async update(
+    id: string,
+    dto: UpdateWorkflowStepDto,
+    userId: string,
+  ) {
 
-    await getStepForUpdate(this.prisma, id)
+    await getStepForUpdate(
+      this.prisma,
+      id,
+    )
 
-    const result = await updateWorkflowStep(this.prisma, id, {
-      ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
-      ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
-      ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
-      ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
-    })
+    const result = await updateWorkflowStep(
+      this.prisma,
+      this.operatorCache,
+      id,
+      {
+        ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
+        ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
+        ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
+        ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
+      },
+    )
 
-    return this.publishDelta(result, userId)
+    return this.publishDelta(
+      result,
+      userId,
+    )
 
   }
 
-  async start(id: string, userId: string) {
+  async start(
+    id: string,
+    userId: string,
+  ) {
 
     return this.transitionStatus(
+
       id,
+
       userId,
 
       status => {
@@ -139,66 +166,105 @@ export class WorkflowService {
         }
 
       },
+
     )
 
   }
 
-  async pause(id: string, userId: string) {
+  async pause(
+    id: string,
+    userId: string,
+  ) {
 
     return this.transitionStatus(
       id,
       userId,
       status => validateProgress(status),
-      () => ({ status: WorkflowStatus.PAUSED }),
+      () => ({
+        status: WorkflowStatus.PAUSED,
+      }),
     )
 
   }
 
-  async resume(id: string, userId: string) {
+  async resume(
+    id: string,
+    userId: string,
+  ) {
 
     return this.transitionStatus(
       id,
       userId,
       status => validatePaused(status),
-      () => ({ status: WorkflowStatus.PROGRESS }),
+      () => ({
+        status: WorkflowStatus.PROGRESS,
+      }),
     )
 
   }
 
-  async complete(id: string, dto: WorkflowActionDto, userId: string) {
+  async complete(
+    id: string,
+    dto: WorkflowActionDto,
+    userId: string,
+  ) {
 
-    const step = await getStepForComplete(this.prisma, id)
+    const step = await getStepForComplete(
+      this.prisma,
+      id,
+    )
 
     validateProgress(step.status)
-    validateOperatorAssigned(step.operatorId, "Debe registrar un operario.")
-    validateCompletePayload(step.processCode, dto)
+    validateOperatorAssigned(
+      step.operatorId,
+      "Debe registrar un operario.",
+    )
+    validateCompletePayload(
+      step.processCode,
+      dto,
+    )
 
-    const result = await updateWorkflowStep(this.prisma, id, {
-      status: WorkflowStatus.COMPLETED,
-      completedAt: new Date(),
-      piecesOutput: dto.piecesOutput ?? null,
-      plRtReal: dto.plRtReal ?? null,
-      paintKgReal: dto.paintKgReal ?? null,
-    })
+    const result = await updateWorkflowStep(
+      this.prisma,
+      this.operatorCache,
+      id,
+      {
+        status: WorkflowStatus.COMPLETED,
+        completedAt: new Date(),
+        piecesOutput: dto.piecesOutput ?? null,
+        plRtReal: dto.plRtReal ?? null,
+        paintKgReal: dto.paintKgReal ?? null,
+      },
+    )
 
-    return this.publishDelta(result, userId)
+    return this.publishDelta(
+      result,
+      userId,
+    )
 
   }
 
-  async review(id: string, userId: string) {
+  async review(
+    id: string,
+    userId: string,
+  ) {
 
-    const step = await getStepForReview(this.prisma, id)
+    const step = await getStepForReview(
+      this.prisma,
+      id,
+    )
 
-    validateCompleted(step.status)
+    validateCompleted(
+      step.status,
+    )
 
     const nextStep = step.task.workflowSteps.find(
       item => item.order === step.order + 1,
     )
 
-    const eligibleNextId =
-      nextStep && nextStep.status === WorkflowStatus.QUEUE
-        ? nextStep.id
-        : undefined
+    const eligibleNextId = nextStep && nextStep.status === WorkflowStatus.QUEUE
+      ? nextStep.id
+      : undefined
 
     const result = await reviewTransaction(
       this.prisma,
@@ -206,26 +272,37 @@ export class WorkflowService {
       eligibleNextId,
     )
 
-    return this.publishDelta(result, userId)
+    return this.publishDelta(
+      result,
+      userId,
+    )
 
   }
 
-  async reopen(id: string, userId: string) {
+  async reopen(
+    id: string,
+    userId: string,
+  ) {
 
-    const step = await getStepForReopen(this.prisma, id)
+    const step = await getStepForReopen(
+      this.prisma,
+      id,
+    )
 
-    validateReopen(step.status)
+    validateReopen(
+      step.status,
+    )
 
     const nextStep = step.task.workflowSteps.find(
       item => item.order === step.order + 1,
     )
 
-    const eligibleNextId =
-      nextStep &&
-      (nextStep.status === WorkflowStatus.PENDING ||
-        nextStep.status === WorkflowStatus.QUEUE)
-        ? nextStep.id
-        : undefined
+    const eligibleNextId = nextStep && (
+      nextStep.status === WorkflowStatus.PENDING ||
+      nextStep.status === WorkflowStatus.QUEUE
+    )
+      ? nextStep.id
+      : undefined
 
     const result = await reopenTransaction(
       this.prisma,
@@ -233,7 +310,10 @@ export class WorkflowService {
       eligibleNextId,
     )
 
-    return this.publishDelta(result, userId)
+    return this.publishDelta(
+      result,
+      userId,
+    )
 
   }
 
