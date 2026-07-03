@@ -159,29 +159,74 @@ export class ProjectsService{
 
     const deletedAt=new Date()
 
-    const project=await this.prisma.$transaction(async tx=>{
+    const project=
 
-      await tx.task.updateMany({
-        where:{ projectId:id, deletedAt:null },
-        data:{ deletedAt, updatedById:userId },
-      })
+      await this.prisma.$transaction(
 
-      return tx.project.update({
-        where:{ id },
-        data:{ deletedAt, updatedById:userId },
-        include:this.includeRelations,
-      })
+        async tx=>{
+
+          await tx.task.updateMany({
+
+            where:{
+              projectId:id,
+              deletedAt:null,
+            },
+
+            data:{
+              deletedAt,
+              updatedById:userId,
+            },
+
+          })
+
+          return tx.project.update({
+
+            where:{ id },
+
+            data:{
+              deletedAt,
+              updatedById:userId,
+            },
+
+            include:this.includeRelations,
+
+          })
+
+        },
+
+      )
+
+    this.realtime.publish({
+
+      entity:"PROJECT",
+
+      action:"DELETED",
+
+      id,
+
+      excludeUserId:userId,
 
     })
 
     this.realtime.publish({
-      entity:"PROJECT",
+
+      entity:"TASK",
+
       action:"DELETED",
-      id,
+
+      id:"cascade",
+
+      payload:{
+        cascade:true,
+        projectId:id,
+      },
+
       excludeUserId:userId,
+
     })
 
     return project
+
   }
 
 }
