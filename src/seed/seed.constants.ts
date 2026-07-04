@@ -88,6 +88,9 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.WORKFLOW_READ,
     PermissionCode.WORKFLOW_UPDATE,
+    PermissionCode.WORKFLOW_REVIEW,
+
+    PermissionCode.USER_READ,
 
   ],
 
@@ -104,6 +107,9 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.WORKFLOW_READ,
     PermissionCode.WORKFLOW_UPDATE,
+    PermissionCode.WORKFLOW_REVIEW,
+
+    PermissionCode.USER_READ,
 
   ],
 
@@ -116,6 +122,9 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.WORKFLOW_READ,
     PermissionCode.WORKFLOW_UPDATE,
+    PermissionCode.WORKFLOW_REVIEW,
+
+    PermissionCode.USER_READ,
 
   ],
 
@@ -127,6 +136,8 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.WORKFLOW_READ,
     PermissionCode.WORKFLOW_UPDATE,
+
+    PermissionCode.USER_READ,
 
   ],
 

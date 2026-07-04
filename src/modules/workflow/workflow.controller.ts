@@ -27,6 +27,14 @@ import {
 } from "@/shared/guards/permissions.guard"
 
 import {
+  Permissions,
+} from "@/shared/decorators/permissions.decorator"
+
+import {
+  PermissionCode,
+} from "@/core/enums/permission-code.enum"
+
+import {
   CurrentUser,
 } from "@/shared/decorators/current-user.decorator"
 
@@ -45,6 +53,9 @@ export class WorkflowController{
     private readonly workflowService:WorkflowService,
   ){}
 
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
   @Patch(":id")
   update(
 
@@ -71,6 +82,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
   @Patch(":id/start")
   start(
 
@@ -92,6 +106,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
   @Patch(":id/pause")
   pause(
 
@@ -113,6 +130,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
   @Patch(":id/resume")
   resume(
 
@@ -134,6 +154,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
   @Patch(":id/complete")
   complete(
 
@@ -160,6 +183,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_REVIEW,
+  )
   @Patch(":id/review")
   review(
 
@@ -181,6 +207,9 @@ export class WorkflowController{
 
   }
 
+  @Permissions(
+    PermissionCode.WORKFLOW_REVIEW,
+  )
   @Patch(":id/reopen")
   reopen(
 

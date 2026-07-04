@@ -20,12 +20,19 @@ export class UsersService {
   ){}
 
   async findAll(){
-    return this.prisma.user.findMany({
+
+    const users=await this.prisma.user.findMany({
       where:{ deletedAt:null },
       include:{ role:true },
       omit:{ passwordHash:true },
-      orderBy:{ createdAt:"desc" },
+      orderBy:{ createdAt:"asc" },
     })
+
+    return users.map(user=>({
+      ...user,
+      online:this.realtime.isUserOnline(user.id),
+    }))
+
   }
 
   async findOne(id:string){
@@ -39,7 +46,10 @@ export class UsersService {
       throw new NotFoundException("User not found")
     }
 
-    return user
+    return {
+      ...user,
+      online:this.realtime.isUserOnline(user.id),
+    }
   }
 
   async create(dto:CreateUserDto,actorId?:string){
@@ -131,12 +141,19 @@ export class UsersService {
   }
 
   async directory(){
-    return this.prisma.user.findMany({
+
+    const users=await this.prisma.user.findMany({
       where:{ deletedAt:null, active:true },
       include:{ role:true },
       omit:{ passwordHash:true },
       orderBy:{ name:"asc" },
     })
+
+    return users.map(user=>({
+      ...user,
+      online:this.realtime.isUserOnline(user.id),
+    }))
+
   }
 
 }

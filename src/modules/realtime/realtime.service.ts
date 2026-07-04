@@ -73,6 +73,12 @@ export class RealtimeService {
       connectedAt: new Date(),
     };
 
+    // Determinar si esta es la PRIMERA conexión activa del usuario
+    // (debe calcularse ANTES de registrar la nueva conexión en el Map)
+    const existingUserConnections = this.connections.get(userId);
+    const isFirstConnection =
+      !existingUserConnections || existingUserConnections.size === 0;
+
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Map());
     }
@@ -89,6 +95,11 @@ export class RealtimeService {
       `Conexión abierta: user=${userId} connection=${connectionId} ` +
         `(conexiones activas del usuario: ${this.connections.get(userId)!.size})`,
     );
+
+    // Presencia: solo emitir online:true si es la primera pestaña/conexión
+    if (isFirstConnection) {
+      this.emitPresence(userId, true);
+    }
 
     return connectionId;
   }
@@ -115,11 +126,20 @@ export class RealtimeService {
     }
 
     userConnections.delete(connectionId);
-    if (userConnections.size === 0) {
+
+    // Determinar si esa era la ÚLTIMA conexión activa del usuario
+    const isLastConnection = userConnections.size === 0;
+
+    if (isLastConnection) {
       this.connections.delete(userId);
     }
 
     this.logger.log(`Conexión cerrada: user=${userId} connection=${connectionId}`);
+
+    // Presencia: solo emitir online:false si ya no quedan conexiones
+    if (isLastConnection) {
+      this.emitPresence(userId, false);
+    }
   }
 
   publish<T>(options: PublishOptions<T>): void {
@@ -192,6 +212,35 @@ export class RealtimeService {
       }
     }
     return result;
+  }
+
+  /**
+   * Indica si el usuario tiene al menos una conexión SSE activa.
+   * Única fuente de verdad para presencia: nadie debe acceder al Map directamente.
+   */
+  isUserOnline(userId: string): boolean {
+    const userConnections = this.connections.get(userId);
+    return !!userConnections && userConnections.size > 0;
+  }
+
+  /**
+   * Devuelve los ids de todos los usuarios con al menos una conexión SSE activa.
+   */
+  getOnlineUserIds(): string[] {
+    return Array.from(this.connections.keys());
+  }
+
+  /**
+   * Emite el evento de presencia USER/UPDATED con el payload mínimo
+   * { id, online }, usado por el frontend para hacer merge parcial.
+   */
+  private emitPresence(userId: string, online: boolean): void {
+    this.publish<{ id: string; online: boolean }>({
+      entity: 'USER',
+      action: 'UPDATED',
+      id: userId,
+      payload: { id: userId, online },
+    });
   }
 
   private userHasAnyRole(

@@ -38,6 +38,8 @@ export const rolePermissionsSeed = {
     "WORKFLOW_UPDATE",
 
     "MASTER_DATA_READ",
+
+    "USER_READ",
   ],
 
   PROJECT_MANAGER: [
@@ -53,6 +55,8 @@ export const rolePermissionsSeed = {
     "WORKFLOW_UPDATE",
 
     "MASTER_DATA_READ",
+
+    "USER_READ",
   ],
 
   SUPERVISOR: [
@@ -65,6 +69,8 @@ export const rolePermissionsSeed = {
     "WORKFLOW_UPDATE",
 
     "MASTER_DATA_READ",
+
+    "USER_READ",
   ],
 
   OPERARIO: [
@@ -76,6 +82,8 @@ export const rolePermissionsSeed = {
     "WORKFLOW_UPDATE",
 
     "MASTER_DATA_READ",
+
+    "USER_READ",
   ],
 
 } as const

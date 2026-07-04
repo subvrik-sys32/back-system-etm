@@ -102,16 +102,38 @@ export class SeedService {
         continue
       }
 
-      for(const permissionCode of permissions){
+      const currentPermissions =
+        await this.prisma.permission.findMany({
+          where:{
+            code:{
+              in:permissions as unknown as string[],
+            },
+          },
+        })
 
-        const permission =
-          await this.prisma.permission.findUnique({
-            where:{ code:permissionCode },
-          })
+      const currentPermissionIds =
+        currentPermissions.map(
+          permission=>permission.id,
+        )
 
-        if(!permission){
-          continue
-        }
+      // Sincronización completa: borra cualquier permiso asignado
+      // al rol que ya NO esté en la constante ROLE_PERMISSIONS.
+      // Esto evita que permisos removidos queden huérfanos en la BD.
+      await this.prisma.rolePermission.deleteMany({
+
+        where:{
+
+          roleId:role.id,
+
+          permissionId:{
+            notIn:currentPermissionIds,
+          },
+
+        },
+
+      })
+
+      for(const permission of currentPermissions){
 
         await this.prisma.rolePermission.upsert({
 
