@@ -12,7 +12,7 @@ export class NotificationRepository{
       where:{ userId },
       include:notificationInclude,
       orderBy:{ createdAt:"desc" },
-      take:params.take+1, // +1 para saber si hay más páginas
+      take:params.take+1,
       ...(params.cursor
         ? { cursor:{ id:params.cursor }, skip:1 }
         : {}),
@@ -35,6 +35,7 @@ export class NotificationRepository{
     return this.prisma.notification.update({
       where:{ id },
       data:{ read:true },
+      include:notificationInclude,
     })
   }
 
