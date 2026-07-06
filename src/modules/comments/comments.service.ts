@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 import { CommentRepository } from "./repositories/comment.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { NotificationsService } from "@/modules/notifications/notifications.service"
 
 @Injectable()
 export class CommentsService{
@@ -8,6 +9,7 @@ export class CommentsService{
   constructor(
     private readonly commentRepository:CommentRepository,
     private readonly realtime:RealtimeService,
+    private readonly notificationsService:NotificationsService,
   ){}
 
   findAllByTask(taskId:string){
@@ -30,6 +32,11 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
+    await this.notificationsService.notifyComment(
+      { id:comment.id, taskId:comment.taskId, workflowStepId:null, message:comment.message },
+      userId,
+    )
+
     return comment
   }
 
@@ -51,20 +58,19 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
+    await this.notificationsService.notifyComment(
+      { id:comment.id, taskId:comment.taskId, workflowStepId, message:comment.message },
+      userId,
+    )
+
     return comment
   }
 
   async update(id:string,message:string,userId:string){
 
     const existing=await this.commentRepository.findById(id)
-
-    if(!existing){
-      throw new NotFoundException("Comment not found")
-    }
-
-    if(existing.userId!==userId){
-      throw new ForbiddenException("No podés editar un comentario ajeno.")
-    }
+    if(!existing)throw new NotFoundException("Comment not found")
+    if(existing.userId!==userId)throw new ForbiddenException("No podés editar un comentario ajeno.")
 
     const comment=await this.commentRepository.update(id,message)
 
@@ -82,14 +88,8 @@ export class CommentsService{
   async remove(id:string,userId:string){
 
     const existing=await this.commentRepository.findById(id)
-
-    if(!existing){
-      throw new NotFoundException("Comment not found")
-    }
-
-    if(existing.userId!==userId){
-      throw new ForbiddenException("No podés eliminar un comentario ajeno.")
-    }
+    if(!existing)throw new NotFoundException("Comment not found")
+    if(existing.userId!==userId)throw new ForbiddenException("No podés eliminar un comentario ajeno.")
 
     await this.commentRepository.softDelete(id)
 

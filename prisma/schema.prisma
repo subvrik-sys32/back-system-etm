@@ -54,47 +54,75 @@ model Client {
 }
 
 model User {
-  id              String         @id @default(uuid())
-  name            String
-  email           String         @unique
-  passwordHash    String
-  roleId          String
-  active          Boolean        @default(true)
-  deletedAt       DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  username        String?        @unique
-  color           String
-  icon            String
-  avatarUrl       String?
-  phone           String?
-  position        String?
-  auditLogs       AuditLog[]
-  createdProjects Project[]      @relation("ProjectCreatedBy")
-  managedProjects Project[]      @relation("ProjectPm")
-  updatedProjects Project[]      @relation("ProjectUpdatedBy")
-  createdTasks    Task[]         @relation("TaskCreatedBy")
-  updatedTasks    Task[]         @relation("TaskUpdatedBy")
-  role            Role           @relation(fields: [roleId], references: [id])
-  workflowSteps   WorkflowStep[]
-  comments        Comment[]
+  id                    String         @id @default(uuid())
+  name                  String
+  email                 String         @unique
+  passwordHash          String
+  roleId                String
+  active                Boolean        @default(true)
+  deletedAt             DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  username              String?        @unique
+  color                 String
+  icon                  String
+  avatarUrl             String?
+  phone                 String?
+  position              String?
+  auditLogs             AuditLog[]
+  createdProjects       Project[]      @relation("ProjectCreatedBy")
+  managedProjects       Project[]      @relation("ProjectPm")
+  updatedProjects       Project[]      @relation("ProjectUpdatedBy")
+  createdTasks          Task[]         @relation("TaskCreatedBy")
+  updatedTasks          Task[]         @relation("TaskUpdatedBy")
+  role                  Role           @relation(fields: [roleId], references: [id])
+  workflowSteps         WorkflowStep[]
+  comments              Comment[]
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  notificationsSent     Notification[] @relation("NotificationActor")
 }
 
 model Comment {
-  id             String        @id @default(uuid())
+  id             String         @id @default(uuid())
   taskId         String
   workflowStepId String?
   userId         String
   message        String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
-  task           Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  workflowStep   WorkflowStep? @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id])
+  task           Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workflowStep   WorkflowStep?  @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id])
+  notifications  Notification[]
 
   @@index([taskId])
   @@index([workflowStepId])
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  userId         String
+  actorId        String
+  type           NotificationType
+  taskId         String
+  workflowStepId String?
+  commentId      String
+  messageSnippet String
+  read           Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  user           User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor          User             @relation("NotificationActor", fields: [actorId], references: [id])
+  task           Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  workflowStep   WorkflowStep?    @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+  comment        Comment          @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+enum NotificationType {
+  MENTION
+  COMMENT
 }
 
 model Priority {
@@ -234,26 +262,28 @@ model Task {
   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
   workflowSteps WorkflowStep[]
   comments      Comment[]
+  notifications Notification[]
 }
 
 model WorkflowStep {
-  id           String         @id @default(uuid())
-  taskId       String
-  processCode  ProcessCode
-  status       WorkflowStatus
-  order        Int
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  paintKgReal  Float?
-  piecesOutput Int?
-  plRtReal     Float?
-  reviewedAt   DateTime?
-  operatorId   String?
-  operator     User?          @relation(fields: [operatorId], references: [id])
-  task         Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  comments     Comment[]
+  id            String         @id @default(uuid())
+  taskId        String
+  processCode   ProcessCode
+  status        WorkflowStatus
+  order         Int
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  paintKgReal   Float?
+  piecesOutput  Int?
+  plRtReal      Float?
+  reviewedAt    DateTime?
+  operatorId    String?
+  operator      User?          @relation(fields: [operatorId], references: [id])
+  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comments      Comment[]
+  notifications Notification[]
 
   @@unique([taskId, processCode])
   @@index([taskId])

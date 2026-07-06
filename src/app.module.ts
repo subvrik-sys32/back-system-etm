@@ -94,6 +94,10 @@ import {
   CommentsModule,
 } from "@/modules/comments/comments.module"
 
+import {
+  NotificationsModule,
+} from "@/modules/notifications/notifications.module"
+
 @Module({
 
   imports:[
@@ -143,6 +147,8 @@ import {
     RealtimeModule,
 
     CommentsModule,
+    
+    NotificationsModule,
 
   ],
 

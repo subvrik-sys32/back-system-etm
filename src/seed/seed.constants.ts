@@ -156,6 +156,8 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.COMMENT_READ,
     PermissionCode.COMMENT_CREATE,
+    PermissionCode.COMMENT_UPDATE,
+    PermissionCode.COMMENT_DELETE,
 
   ],
 
