@@ -77,6 +77,23 @@ model User {
   updatedTasks    Task[]         @relation("TaskUpdatedBy")
   role            Role           @relation(fields: [roleId], references: [id])
   workflowSteps   WorkflowStep[]
+  comments        Comment[]
+}
+
+model Comment {
+  id             String        @id @default(uuid())
+  taskId         String
+  userId         String
+  message        String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  task           Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id])
+  workflowStep   WorkflowStep? @relation(fields: [workflowStepId], references: [id])
+  workflowStepId String?
+
+  @@index([taskId])
 }
 
 model Priority {
@@ -215,6 +232,7 @@ model Task {
   thickness     Thickness      @relation(fields: [thicknessId], references: [id])
   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
   workflowSteps WorkflowStep[]
+  comments      Comment[]
 }
 
 model WorkflowStep {
@@ -234,6 +252,7 @@ model WorkflowStep {
   operatorId   String?
   operator     User?          @relation(fields: [operatorId], references: [id])
   task         Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comments     Comment[]
 
   @@unique([taskId, processCode])
   @@index([taskId])
