@@ -2,7 +2,6 @@ import { Injectable } from "@nestjs/common"
 import { NotificationRepository } from "./repositories/notification.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { extractMentionedUsernames } from "@/modules/comments/utils/parse-mentions"
-import { notificationInclude } from "./entities/notification.entity"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 
 type CommentContext={
@@ -11,6 +10,8 @@ type CommentContext={
   workflowStepId:string|null
   message:string
 }
+
+const DEFAULT_PAGE_SIZE=20
 
 @Injectable()
 export class NotificationsService{
@@ -21,8 +22,16 @@ export class NotificationsService{
     private readonly prisma:PrismaService,
   ){}
 
-  findAllForUser(userId:string){
-    return this.notificationRepository.findAllForUser(userId)
+  async findAllForUser(userId:string, cursor?:string, take=DEFAULT_PAGE_SIZE){
+
+    const rows=await this.notificationRepository.findAllForUser(userId,{ cursor, take })
+
+    const hasMore=rows.length>take
+    const items=hasMore?rows.slice(0,take):rows
+    const nextCursor=hasMore?items[items.length-1].id:null
+
+    return { items, nextCursor }
+
   }
 
   async getUnreadCount(userId:string){

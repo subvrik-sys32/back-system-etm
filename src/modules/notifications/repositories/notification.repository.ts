@@ -7,12 +7,15 @@ export class NotificationRepository{
 
   constructor(private readonly prisma:PrismaService){}
 
-  findAllForUser(userId:string){
+  findAllForUser(userId:string, params:{ cursor?:string; take:number }){
     return this.prisma.notification.findMany({
       where:{ userId },
       include:notificationInclude,
       orderBy:{ createdAt:"desc" },
-      take:50,
+      take:params.take+1, // +1 para saber si hay más páginas
+      ...(params.cursor
+        ? { cursor:{ id:params.cursor }, skip:1 }
+        : {}),
     })
   }
 

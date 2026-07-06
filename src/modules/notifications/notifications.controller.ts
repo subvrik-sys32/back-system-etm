@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Param,
+  Query,
   UseGuards,
 } from "@nestjs/common"
 
@@ -20,8 +21,16 @@ export class NotificationsController{
   ){}
 
   @Get()
-  findAll(@CurrentUser() user:CurrentUserType){
-    return this.notificationsService.findAllForUser(user.id)
+  findAll(
+    @CurrentUser() user:CurrentUserType,
+    @Query("cursor") cursor?:string,
+    @Query("take") take?:string,
+  ){
+    return this.notificationsService.findAllForUser(
+      user.id,
+      cursor,
+      take?Number(take):undefined,
+    )
   }
 
   @Get("unread-count")
