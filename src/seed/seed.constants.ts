@@ -92,6 +92,11 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.USER_READ,
 
+    PermissionCode.COMMENT_READ,
+    PermissionCode.COMMENT_CREATE,
+    PermissionCode.COMMENT_UPDATE,
+    PermissionCode.COMMENT_DELETE,
+
   ],
 
   [RoleCode.PROJECT_MANAGER]: [
@@ -111,6 +116,11 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.USER_READ,
 
+    PermissionCode.COMMENT_READ,
+    PermissionCode.COMMENT_CREATE,
+    PermissionCode.COMMENT_UPDATE,
+    PermissionCode.COMMENT_DELETE,
+
   ],
 
   [RoleCode.SUPERVISOR]: [
@@ -126,6 +136,11 @@ export const ROLE_PERMISSIONS = {
 
     PermissionCode.USER_READ,
 
+    PermissionCode.COMMENT_READ,
+    PermissionCode.COMMENT_CREATE,
+    PermissionCode.COMMENT_UPDATE,
+    PermissionCode.COMMENT_DELETE,
+
   ],
 
   [RoleCode.OPERARIO]: [
@@ -138,6 +153,9 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.WORKFLOW_UPDATE,
 
     PermissionCode.USER_READ,
+
+    PermissionCode.COMMENT_READ,
+    PermissionCode.COMMENT_CREATE,
 
   ],
 

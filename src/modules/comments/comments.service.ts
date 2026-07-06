@@ -14,9 +14,34 @@ export class CommentsService{
     return this.commentRepository.findAllByTask(taskId)
   }
 
-  async create(taskId:string,message:string,userId:string){
+  findAllByWorkflowStep(workflowStepId:string){
+    return this.commentRepository.findAllByWorkflowStep(workflowStepId)
+  }
 
-    const comment=await this.commentRepository.create(taskId,userId,message)
+  async createForTask(taskId:string,message:string,userId:string){
+
+    const comment=await this.commentRepository.createForTask(taskId,userId,message)
+
+    this.realtime.publish({
+      entity:"COMMENT",
+      action:"CREATED",
+      id:comment.id,
+      payload:comment,
+      excludeUserId:userId,
+    })
+
+    return comment
+  }
+
+  async createForWorkflowStep(workflowStepId:string,message:string,userId:string){
+
+    const taskId=await this.commentRepository.getWorkflowStepTaskId(workflowStepId)
+
+    if(!taskId){
+      throw new NotFoundException("Workflow step not found")
+    }
+
+    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message)
 
     this.realtime.publish({
       entity:"COMMENT",
@@ -72,7 +97,7 @@ export class CommentsService{
       entity:"COMMENT",
       action:"DELETED",
       id,
-      payload:{ id, taskId:existing.taskId },
+      payload:{ id, taskId:existing.taskId, workflowStepId:existing.workflowStepId },
       excludeUserId:userId,
     })
 

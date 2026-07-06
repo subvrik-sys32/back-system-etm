@@ -9,7 +9,15 @@ export class CommentRepository{
 
   findAllByTask(taskId:string){
     return this.prisma.comment.findMany({
-      where:{ taskId, deletedAt:null },
+      where:{ taskId, workflowStepId:null, deletedAt:null },
+      include:commentInclude,
+      orderBy:{ createdAt:"desc" },
+    })
+  }
+
+  findAllByWorkflowStep(workflowStepId:string){
+    return this.prisma.comment.findMany({
+      where:{ workflowStepId, deletedAt:null },
       include:commentInclude,
       orderBy:{ createdAt:"desc" },
     })
@@ -22,9 +30,24 @@ export class CommentRepository{
     })
   }
 
-  create(taskId:string,userId:string,message:string){
+  async getWorkflowStepTaskId(workflowStepId:string){
+    const step=await this.prisma.workflowStep.findUnique({
+      where:{ id:workflowStepId },
+      select:{ taskId:true },
+    })
+    return step?.taskId??null
+  }
+
+  createForTask(taskId:string,userId:string,message:string){
     return this.prisma.comment.create({
-      data:{ taskId, userId, message:message.trim() },
+      data:{ taskId, userId, message:message.trim(), workflowStepId:null },
+      include:commentInclude,
+    })
+  }
+
+  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string){
+    return this.prisma.comment.create({
+      data:{ taskId, workflowStepId, userId, message:message.trim() },
       include:commentInclude,
     })
   }

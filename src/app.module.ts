@@ -90,6 +90,10 @@ import {
   RealtimeModule,
 } from "@/modules/realtime/realtime.module"
 
+import {
+  CommentsModule,
+} from "@/modules/comments/comments.module"
+
 @Module({
 
   imports:[
@@ -137,6 +141,8 @@ import {
     CodeGeneratorModule,
 
     RealtimeModule,
+
+    CommentsModule,
 
   ],
 

@@ -21,4 +21,9 @@ export const permissionsSeed=[
   "USER_UPDATE",
   "USER_DELETE",
 
+  "COMMENT_READ",
+  "COMMENT_CREATE",
+  "COMMENT_UPDATE",
+  "COMMENT_DELETE",
+
 ]
