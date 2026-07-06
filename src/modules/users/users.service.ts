@@ -11,6 +11,9 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
 
+import { UpdateProfileDto } from "./dto/update-profile.dto"
+import { UpdateAvatarDto } from "./dto/update-avatar.dto"
+
 @Injectable()
 export class UsersService {
 
@@ -121,6 +124,73 @@ export class UsersService {
     })
 
     return user
+  }
+
+  async updateProfile(userId:string, dto:UpdateProfileDto, actorId?:string){
+
+    const user=await this.prisma.user.update({
+      where:{ id:userId },
+      data:{
+        name:dto.name,
+        phone:dto.phone,
+        position:dto.position,
+      },
+      include:{ role:true },
+      omit:{ passwordHash:true },
+    })
+
+    this.realtime.publish({
+      entity:"USER",
+      action:"UPDATED",
+      id:user.id,
+      payload:user,
+      excludeUserId:actorId,
+    })
+
+    return user
+
+  }
+
+  async updateAvatar(userId:string, dto:UpdateAvatarDto, actorId?:string){
+
+    const user=await this.prisma.user.update({
+      where:{ id:userId },
+      data:{ avatarUrl:dto.imageBase64 },
+      include:{ role:true },
+      omit:{ passwordHash:true },
+    })
+
+    this.realtime.publish({
+      entity:"USER",
+      action:"UPDATED",
+      id:user.id,
+      payload:user,
+      excludeUserId:actorId,
+    })
+
+    return { avatarUrl:user.avatarUrl }
+
+  }
+
+  async removeAvatar(userId:string, actorId?:string){
+
+    const user=await this.prisma.user.update({
+      where:{ id:userId },
+      data:{ avatarUrl:null },
+      include:{ role:true },
+      omit:{ passwordHash:true },
+    })
+
+    this.realtime.publish({
+      entity:"USER",
+      action:"UPDATED",
+      id:user.id,
+      payload:user,
+      excludeUserId:actorId,
+    })
+
+    return { avatarUrl:null }
+
   }
 
   async remove(id:string,actorId?:string){

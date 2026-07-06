@@ -30,6 +30,12 @@ export class AuthUserDto{
 
   active!:boolean
 
+  avatarUrl!:string|null
+
+  phone!:string|null
+
+  position!:string|null
+
   role!:AuthRoleDto
 
 }

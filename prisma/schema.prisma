@@ -66,6 +66,9 @@ model User {
   username        String?        @unique
   color           String
   icon            String
+  avatarUrl       String?
+  phone           String?
+  position        String?
   auditLogs       AuditLog[]
   createdProjects Project[]      @relation("ProjectCreatedBy")
   managedProjects Project[]      @relation("ProjectPm")

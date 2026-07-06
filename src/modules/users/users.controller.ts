@@ -45,6 +45,10 @@ import {
   PermissionCode,
 } from "@/core/enums/permission-code.enum"
 
+import { UpdateProfileDto } from "./dto/update-profile.dto"
+
+import { UpdateAvatarDto } from "./dto/update-avatar.dto"
+
 @Controller("users")
 export class UsersController {
 
@@ -59,6 +63,62 @@ export class UsersController {
   directory() {
 
     return this.usersService.directory()
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+  )
+  @Patch("profile")
+  updateProfile(
+    @Body()
+    dto: UpdateProfileDto,
+
+    @CurrentUser()
+    user: CurrentUserType,
+  ) {
+
+    return this.usersService.updateProfile(
+      user.id,
+      dto,
+      user.id,
+    )
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+  )
+  @Post("avatar")
+  updateAvatar(
+    @Body()
+    dto: UpdateAvatarDto,
+
+    @CurrentUser()
+    user: CurrentUserType,
+  ) {
+
+    return this.usersService.updateAvatar(
+      user.id,
+      dto,
+      user.id,
+    )
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+  )
+  @Delete("avatar")
+  removeAvatar(
+    @CurrentUser()
+    user: CurrentUserType,
+  ) {
+
+    return this.usersService.removeAvatar(
+      user.id,
+      user.id,
+    )
 
   }
 

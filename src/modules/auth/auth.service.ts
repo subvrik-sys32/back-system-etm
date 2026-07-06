@@ -134,6 +134,12 @@ export class AuthService{
 
         active:user.active,
 
+        avatarUrl:user.avatarUrl,
+
+        phone:user.phone,
+
+        position:user.position,
+
         role:{
 
           id:user.role.id,
@@ -230,6 +236,12 @@ export class AuthService{
         color:user.color,
 
         active:user.active,
+
+        avatarUrl:user.avatarUrl,
+
+        phone:user.phone,
+
+        position:user.position,
 
         role:{
 

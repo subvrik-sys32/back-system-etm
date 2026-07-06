@@ -51,9 +51,6 @@ export class PrioritiesController {
 
   ){}
 
-  @Permissions(
-    PermissionCode.MASTER_DATA_READ,
-  )
   @Get()
   findAll(){
 
@@ -62,9 +59,6 @@ export class PrioritiesController {
 
   }
 
-  @Permissions(
-    PermissionCode.MASTER_DATA_READ,
-  )
   @Get(":id")
   findOne(
 

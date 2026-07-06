@@ -51,9 +51,6 @@ export class StatusesController {
 
   ){}
 
-  @Permissions(
-    PermissionCode.MASTER_DATA_READ,
-  )
   @Get()
   findAll(){
 
@@ -62,9 +59,6 @@ export class StatusesController {
 
   }
 
-  @Permissions(
-    PermissionCode.MASTER_DATA_READ,
-  )
   @Get(":id")
   findOne(
 
