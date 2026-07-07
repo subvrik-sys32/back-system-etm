@@ -6,4 +6,6 @@ export type CurrentUserType = {
 
   role:string
 
+  permissions:string[]
+
 }

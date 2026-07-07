@@ -84,7 +84,7 @@ export class CommentsController {
     @Param("id") id:string,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.remove(id,user.id)
+    return this.commentsService.remove(id,user)
   }
 
 }

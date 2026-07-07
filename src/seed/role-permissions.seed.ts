@@ -21,6 +21,12 @@ export const rolePermissionsSeed = {
     "USER_READ",
     "USER_UPDATE",
     "USER_DELETE",
+
+    "COMMENT_CREATE",
+    "COMMENT_READ",
+    "COMMENT_UPDATE",
+    "COMMENT_DELETE",
+    "COMMENT_DELETE_ANY",
   ],
 
   GERENCIA: [
@@ -40,6 +46,11 @@ export const rolePermissionsSeed = {
     "MASTER_DATA_READ",
 
     "USER_READ",
+
+    "COMMENT_CREATE",
+    "COMMENT_READ",
+    "COMMENT_UPDATE",
+    "COMMENT_DELETE",
   ],
 
   PROJECT_MANAGER: [
@@ -57,6 +68,11 @@ export const rolePermissionsSeed = {
     "MASTER_DATA_READ",
 
     "USER_READ",
+
+    "COMMENT_CREATE",
+    "COMMENT_READ",
+    "COMMENT_UPDATE",
+    "COMMENT_DELETE",
   ],
 
   SUPERVISOR: [
@@ -71,6 +87,11 @@ export const rolePermissionsSeed = {
     "MASTER_DATA_READ",
 
     "USER_READ",
+
+    "COMMENT_CREATE",
+    "COMMENT_READ",
+    "COMMENT_UPDATE",
+    "COMMENT_DELETE",
   ],
 
   OPERARIO: [
@@ -84,6 +105,11 @@ export const rolePermissionsSeed = {
     "MASTER_DATA_READ",
 
     "USER_READ",
+
+    "COMMENT_CREATE",
+    "COMMENT_READ",
+    "COMMENT_UPDATE",
+    "COMMENT_DELETE",
   ],
 
 } as const

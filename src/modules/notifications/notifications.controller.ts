@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Patch,
   Param,
@@ -49,6 +50,19 @@ export class NotificationsController{
   @Patch("read-all")
   markAllAsRead(@CurrentUser() user:CurrentUserType){
     return this.notificationsService.markAllAsRead(user.id)
+  }
+
+  @Delete(":id")
+  remove(
+    @Param("id") id:string,
+    @CurrentUser() user:CurrentUserType,
+  ){
+    return this.notificationsService.remove(id,user.id)
+  }
+
+  @Delete()
+  removeAll(@CurrentUser() user:CurrentUserType){
+    return this.notificationsService.removeAll(user.id)
   }
 
 }

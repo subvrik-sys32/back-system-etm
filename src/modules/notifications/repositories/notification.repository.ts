@@ -75,8 +75,9 @@ export class NotificationRepository{
     })
   }
 
-  getTaskParticipants(taskId:string){
-    return this.prisma.task.findUnique({
+  async getTaskParticipants(taskId:string){
+
+    const task=await this.prisma.task.findUnique({
       where:{ id:taskId },
       select:{
         createdById:true,
@@ -84,12 +85,49 @@ export class NotificationRepository{
         project:{ select:{ pmId:true } },
       },
     })
+
+    if(!task)return null
+
+    const [commentAuthors,stepOperators]=await Promise.all([
+      this.prisma.comment.findMany({
+        where:{ taskId, deletedAt:null },
+        distinct:["userId"],
+        select:{ userId:true },
+      }),
+      this.prisma.workflowStep.findMany({
+        where:{ taskId, operatorId:{ not:null } },
+        distinct:["operatorId"],
+        select:{ operatorId:true },
+      }),
+    ])
+
+    return {
+      createdById:task.createdById,
+      updatedById:task.updatedById,
+      pmId:task.project?.pmId??null,
+      commentAuthorIds:commentAuthors.map(c=>c.userId),
+      operatorIds:stepOperators
+        .map(s=>s.operatorId)
+        .filter((id):id is string=>!!id),
+    }
+
   }
 
-  getWorkflowStepOperator(workflowStepId:string){
-    return this.prisma.workflowStep.findUnique({
-      where:{ id:workflowStepId },
-      select:{ operatorId:true },
+  delete(id:string,userId:string){
+    return this.prisma.notification.deleteMany({
+      where:{ id, userId },
+    })
+  }
+
+  deleteAllForUser(userId:string){
+    return this.prisma.notification.deleteMany({
+      where:{ userId },
+    })
+  }
+
+  deleteByCommentId(commentId:string){
+    return this.prisma.notification.deleteMany({
+      where:{ commentId },
     })
   }
 

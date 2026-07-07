@@ -53,6 +53,54 @@ export class NotificationsService{
     return { success:true }
   }
 
+  async remove(id:string,userId:string){
+
+    const result=await this.notificationRepository.delete(id,userId)
+    if(result.count===0)return null
+
+    this.realtime.publishToUser(userId,{
+      entity:"NOTIFICATION",
+      action:"DELETED",
+      id,
+      payload:{ id },
+    })
+
+    return { id }
+
+  }
+
+  async removeAll(userId:string){
+
+    await this.notificationRepository.deleteAllForUser(userId)
+
+    this.realtime.publishToUser(userId,{
+      entity:"NOTIFICATION",
+      action:"DELETED_ALL",
+      payload:{},
+    })
+
+    return { success:true }
+
+  }
+
+  async deleteByCommentId(commentId:string){
+
+    const notifications=await this.notificationRepository.findManyByComment(commentId)
+    if(notifications.length===0)return
+
+    await this.notificationRepository.deleteByCommentId(commentId)
+
+    for(const notification of notifications){
+      this.realtime.publishToUser(notification.userId,{
+        entity:"NOTIFICATION",
+        action:"DELETED",
+        id:notification.id,
+        payload:{ id:notification.id },
+      })
+    }
+
+  }
+
   async notifyComment(comment:CommentContext,actorId:string){
 
     const usernames=extractMentionedUsernames(comment.message)
@@ -72,18 +120,22 @@ export class NotificationsService{
     const taskInfo=await this.notificationRepository.getTaskParticipants(comment.taskId)
 
     if(taskInfo){
+
       participantIds.add(taskInfo.createdById)
       participantIds.add(taskInfo.updatedById)
-      if(taskInfo.project?.pmId){
-        participantIds.add(taskInfo.project.pmId)
-      }
-    }
 
-    if(comment.workflowStepId){
-      const step=await this.notificationRepository.getWorkflowStepOperator(comment.workflowStepId)
-      if(step?.operatorId){
-        participantIds.add(step.operatorId)
+      if(taskInfo.pmId){
+        participantIds.add(taskInfo.pmId)
       }
+
+      for(const id of taskInfo.commentAuthorIds){
+        participantIds.add(id)
+      }
+
+      for(const id of taskInfo.operatorIds){
+        participantIds.add(id)
+      }
+
     }
 
     participantIds.delete(actorId)

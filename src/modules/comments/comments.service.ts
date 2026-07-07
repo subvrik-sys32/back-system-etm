@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { CommentRepository } from "./repositories/comment.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { NotificationsService } from "@/modules/notifications/notifications.service"
+import { PermissionCode } from "@/core/enums/permission-code.enum"
+import type { CurrentUserType } from "@/shared/types/current-user.types"
 
 @Injectable()
 export class CommentsService{
@@ -85,20 +87,27 @@ export class CommentsService{
     return comment
   }
 
-  async remove(id:string,userId:string){
+  async remove(id:string,user:CurrentUserType){
 
     const existing=await this.commentRepository.findById(id)
     if(!existing)throw new NotFoundException("Comment not found")
-    if(existing.userId!==userId)throw new ForbiddenException("No podés eliminar un comentario ajeno.")
+
+    const isOwner=existing.userId===user.id
+    const canDeleteAny=(user.permissions??[]).includes(PermissionCode.COMMENT_DELETE_ANY)
+
+    if(!isOwner&&!canDeleteAny){
+      throw new ForbiddenException("No podés eliminar un comentario ajeno.")
+    }
 
     await this.commentRepository.softDelete(id)
+    await this.notificationsService.deleteByCommentId(id)
 
     this.realtime.publish({
       entity:"COMMENT",
       action:"DELETED",
       id,
       payload:{ id, taskId:existing.taskId, workflowStepId:existing.workflowStepId },
-      excludeUserId:userId,
+      excludeUserId:user.id,
     })
 
     return { id }
