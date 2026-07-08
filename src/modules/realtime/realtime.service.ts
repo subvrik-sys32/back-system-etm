@@ -1,5 +1,3 @@
-// realtime.service.ts
-
 import { Injectable, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import { randomUUID } from 'crypto';
