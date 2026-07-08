@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
+import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common"
 import { CommentRepository } from "./repositories/comment.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { NotificationsService } from "@/modules/notifications/notifications.service"
@@ -7,6 +7,8 @@ import type { CurrentUserType } from "@/shared/types/current-user.types"
 
 @Injectable()
 export class CommentsService{
+
+  private readonly logger = new Logger(CommentsService.name)
 
   constructor(
     private readonly commentRepository:CommentRepository,
@@ -22,6 +24,36 @@ export class CommentsService{
     return this.commentRepository.findAllByWorkflowStep(workflowStepId)
   }
 
+  // Dispara la notificación SIN bloquear la respuesta al front. Antes,
+  // el `await` acá hacía que el usuario esperara todo lo que
+  // notifyComment tardara (buscar destinatarios, crear registros,
+  // enviar push/email) para recién ver su comentario reflejado. El
+  // comentario ya está guardado y publicado por realtime en este punto;
+  // la notificación es un efecto secundario que puede resolverse un
+  // instante después sin que nadie lo note.
+  //
+  // .catch() es obligatorio: sin él, un rechazo acá se vuelve un
+  // "unhandled promise rejection" que puede tumbar el proceso en Node
+  // según la configuración, o like at least ensuciar los logs sin
+  // contexto.
+  private fireNotifyComment(
+    payload:{ id:string; taskId:string; workflowStepId:string|null; message:string },
+    userId:string,
+  ){
+
+    this.notificationsService
+      .notifyComment(payload, userId)
+      .catch(error => {
+
+        this.logger.error(
+          `Fallo al notificar el comentario ${payload.id}`,
+          error instanceof Error ? error.stack : error,
+        )
+
+      })
+
+  }
+
   async createForTask(taskId:string,message:string,userId:string){
 
     const comment=await this.commentRepository.createForTask(taskId,userId,message)
@@ -34,7 +66,7 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
-    await this.notificationsService.notifyComment(
+    this.fireNotifyComment(
       { id:comment.id, taskId:comment.taskId, workflowStepId:null, message:comment.message },
       userId,
     )
@@ -60,7 +92,7 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
-    await this.notificationsService.notifyComment(
+    this.fireNotifyComment(
       { id:comment.id, taskId:comment.taskId, workflowStepId, message:comment.message },
       userId,
     )
@@ -100,7 +132,19 @@ export class CommentsService{
     }
 
     await this.commentRepository.softDelete(id)
-    await this.notificationsService.deleteByCommentId(id)
+
+    // Igual que arriba: esto es un efecto secundario de limpieza, no
+    // necesita bloquear la respuesta de borrado.
+    this.notificationsService
+      .deleteByCommentId(id)
+      .catch(error => {
+
+        this.logger.error(
+          `Fallo al limpiar notificaciones del comentario ${id}`,
+          error instanceof Error ? error.stack : error,
+        )
+
+      })
 
     this.realtime.publish({
       entity:"COMMENT",
