@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common"
 
 import {
@@ -37,10 +38,17 @@ import {
   PermissionCode,
 } from "@/core/enums/permission-code.enum"
 
+import {
+  RealtimeEntity,
+  EntityRealtimeInterceptor,
+} from "@/modules/realtime/entity-realtime.interceptor"
+
 @UseGuards(
   JwtAuthGuard,
   PermissionsGuard,
 )
+@RealtimeEntity("clients")
+@UseInterceptors(EntityRealtimeInterceptor)
 @Controller("clients")
 export class ClientsController {
 
