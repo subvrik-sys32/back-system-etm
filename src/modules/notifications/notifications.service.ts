@@ -172,6 +172,12 @@ export class NotificationsService{
 
     await this.notificationRepository.createMany(rows)
 
+    // Volvemos a preguntarle a la DB qué quedó creado (con todos los
+    // campos que Prisma agrega por default: createdAt, isRead, etc.),
+    // para que el payload de realtime tenga exactamente la misma forma
+    // que el front ya espera en cualquier otro lado (findAllForUser).
+    // Es una consulta extra, pero barata, y evita romper el shape sin
+    // tener a la vista el tipo Notification del front.
     const created=await this.notificationRepository.findManyByComment(comment.id)
 
     for(const notification of created){
