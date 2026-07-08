@@ -47,7 +47,7 @@ import {
   JwtAuthGuard,
   PermissionsGuard,
 )
-@RealtimeEntity("clients")
+@RealtimeEntity("CLIENT")
 @UseInterceptors(EntityRealtimeInterceptor)
 @Controller("clients")
 export class ClientsController {
