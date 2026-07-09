@@ -44,7 +44,40 @@ export class NotificationsService{
     const existing=await this.notificationRepository.findById(id,userId)
     if(!existing)return null
 
-    return this.notificationRepository.markAsRead(id)
+    const updated=await this.notificationRepository.markAsRead(id)
+
+    // Si esta notificación pertenece a un comentario, recalculamos y
+    // publicamos el estado de lectura agregado, para que el autor del
+    // comentario vea el "doble check" actualizarse en vivo.
+    if(updated?.commentId){
+
+      const status=await this.getCommentReadStatus(updated.commentId)
+
+      this.realtime.publish({
+        entity:"COMMENT_READ_STATUS",
+        action:"UPDATED",
+        id:updated.commentId,
+        payload:{ commentId:updated.commentId, ...status },
+      })
+
+    }
+
+    return updated
+
+  }
+
+  async getCommentReadStatus(commentId:string){
+
+    const rows=await this.notificationRepository.getReadStatusByComment(commentId)
+
+    const total=rows.length
+    const readCount=rows.filter(r=>r.read).length
+
+    return {
+      total,
+      readCount,
+      allRead: total>0 && readCount===total,
+    }
 
   }
 
@@ -115,40 +148,15 @@ export class NotificationsService{
         .filter(id=>id!==actorId),
     )
 
-    const participantIds=new Set<string>()
-
-    const taskInfo=await this.notificationRepository.getTaskParticipants(comment.taskId)
-
-    if(taskInfo){
-
-      participantIds.add(taskInfo.createdById)
-      participantIds.add(taskInfo.updatedById)
-
-      if(taskInfo.pmId){
-        participantIds.add(taskInfo.pmId)
-      }
-
-      for(const id of taskInfo.commentAuthorIds){
-        participantIds.add(id)
-      }
-
-      for(const id of taskInfo.operatorIds){
-        participantIds.add(id)
-      }
-
-    }
-
-    participantIds.delete(actorId)
-    for(const id of mentionedUserIds){
-      participantIds.delete(id)
-    }
-
     const snippet=comment.message.length>140
       ?`${comment.message.slice(0,140)}...`
       :comment.message
 
-    const rows=[
-      ...Array.from(mentionedUserIds).map(userId=>({
+    // Si hay @menciones, el comentario deja de ser global: solo se
+    // notifica a las personas mencionadas. Si no hay menciones, se
+    // notifica a todos los usuarios activos (comentario global).
+    const rows=mentionedUserIds.size>0
+      ?Array.from(mentionedUserIds).map(userId=>({
         userId,
         actorId,
         type:"MENTION" as const,
@@ -156,17 +164,16 @@ export class NotificationsService{
         workflowStepId:comment.workflowStepId,
         commentId:comment.id,
         messageSnippet:snippet,
-      })),
-      ...Array.from(participantIds).map(userId=>({
-        userId,
+      }))
+      :(await this.notificationRepository.getAllActiveUserIds(actorId)).map(u=>({
+        userId:u.id,
         actorId,
         type:"COMMENT" as const,
         taskId:comment.taskId,
         workflowStepId:comment.workflowStepId,
         commentId:comment.id,
         messageSnippet:snippet,
-      })),
-    ]
+      }))
 
     if(rows.length===0)return
 
@@ -188,6 +195,47 @@ export class NotificationsService{
         payload:notification,
       })
     }
+
+  }
+
+  async markTargetAsRead(
+    userId:string,
+    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string },
+  ){
+
+    const unread=target.scope==="task"
+      ?await this.notificationRepository.findUnreadByTaskId(userId,target.taskId)
+      :await this.notificationRepository.findUnreadByWorkflowStepId(userId,target.workflowStepId)
+
+    if(unread.length===0)return { success:true }
+
+    const ids=unread.map(n=>n.id)
+    await this.notificationRepository.markManyAsRead(ids)
+
+    // Un mismo "abrir historial" puede marcar leídas notificaciones de
+    // varios comentarios distintos: recalculamos y publicamos el doble
+    // check de cada uno.
+    const uniqueCommentIds=Array.from(new Set(unread.map(n=>n.commentId)))
+
+    for(const commentId of uniqueCommentIds){
+      const status=await this.getCommentReadStatus(commentId)
+      this.realtime.publish({
+        entity:"COMMENT_READ_STATUS",
+        action:"UPDATED",
+        id:commentId,
+        payload:{ commentId, ...status },
+      })
+    }
+
+    // Para que la campana del propio usuario (que marcó como leído)
+    // también refleje el cambio sin esperar el refetchInterval.
+    this.realtime.publishToUser(userId,{
+      entity:"NOTIFICATION",
+      action:"BULK_READ",
+      payload:{ ids },
+    })
+
+    return { success:true }
 
   }
 

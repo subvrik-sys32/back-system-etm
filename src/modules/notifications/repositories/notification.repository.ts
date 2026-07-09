@@ -4,7 +4,6 @@ import { notificationInclude } from "../entities/notification.entity"
 
 @Injectable()
 export class NotificationRepository{
-
   constructor(private readonly prisma:PrismaService){}
 
   findAllForUser(userId:string, params:{ cursor?:string; take:number }){
@@ -16,6 +15,27 @@ export class NotificationRepository{
       ...(params.cursor
         ? { cursor:{ id:params.cursor }, skip:1 }
         : {}),
+    })
+  }
+
+  findUnreadByTaskId(userId:string, taskId:string){
+    return this.prisma.notification.findMany({
+      where:{ userId, read:false, taskId, workflowStepId:null },
+      select:{ id:true, commentId:true },
+    })
+  }
+
+  findUnreadByWorkflowStepId(userId:string, workflowStepId:string){
+    return this.prisma.notification.findMany({
+      where:{ userId, read:false, workflowStepId },
+      select:{ id:true, commentId:true },
+    })
+  }
+
+  markManyAsRead(ids:string[]){
+    return this.prisma.notification.updateMany({
+      where:{ id:{ in:ids } },
+      data:{ read:true },
     })
   }
 
@@ -75,8 +95,30 @@ export class NotificationRepository{
     })
   }
 
-  async getTaskParticipants(taskId:string){
+  // Todos los usuarios activos del sistema, excepto el que comenta.
+  // Es la base de un comentario "global": si no hay @mención, le
+  // llega a todos.
+  getAllActiveUserIds(excludeUserId:string){
+    return this.prisma.user.findMany({
+      where:{
+        deletedAt:null,
+        active:true,
+        id:{ not:excludeUserId },
+      },
+      select:{ id:true },
+    })
+  }
 
+  // Estado de lectura de un comentario: cuántos destinatarios ya lo
+  // vieron. Es la base del "doble check" en el front.
+  getReadStatusByComment(commentId:string){
+    return this.prisma.notification.findMany({
+      where:{ commentId },
+      select:{ userId:true, read:true },
+    })
+  }
+
+  async getTaskParticipants(taskId:string){
     const task=await this.prisma.task.findUnique({
       where:{ id:taskId },
       select:{
@@ -85,9 +127,7 @@ export class NotificationRepository{
         project:{ select:{ pmId:true } },
       },
     })
-
     if(!task)return null
-
     const [commentAuthors,stepOperators]=await Promise.all([
       this.prisma.comment.findMany({
         where:{ taskId, deletedAt:null },
@@ -100,7 +140,6 @@ export class NotificationRepository{
         select:{ operatorId:true },
       }),
     ])
-
     return {
       createdById:task.createdById,
       updatedById:task.updatedById,
@@ -110,7 +149,6 @@ export class NotificationRepository{
         .map(s=>s.operatorId)
         .filter((id):id is string=>!!id),
     }
-
   }
 
   delete(id:string,userId:string){
@@ -130,5 +168,4 @@ export class NotificationRepository{
       where:{ commentId },
     })
   }
-
 }

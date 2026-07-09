@@ -3,12 +3,11 @@ import {
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
+  Param,
   Post,
   UseGuards,
 } from "@nestjs/common"
-
 import { CommentsService } from "./comments.service"
 import { CreateCommentDto } from "./dto/create-comment.dto"
 import { UpdateCommentDto } from "./dto/update-comment.dto"
@@ -25,13 +24,11 @@ import { PermissionCode } from "@/core/enums/permission-code.enum"
 )
 @Controller()
 export class CommentsController {
-
   constructor(
     private readonly commentsService:CommentsService,
   ){}
 
   // ---- Nivel Tarea ----
-
   @Permissions(PermissionCode.COMMENT_READ)
   @Get("tasks/:taskId/comments")
   findAllByTask(@Param("taskId") taskId:string){
@@ -49,7 +46,6 @@ export class CommentsController {
   }
 
   // ---- Nivel Proceso (WorkflowStep) ----
-
   @Permissions(PermissionCode.COMMENT_READ)
   @Get("workflow-steps/:workflowStepId/comments")
   findAllByWorkflowStep(@Param("workflowStepId") workflowStepId:string){
@@ -67,6 +63,11 @@ export class CommentsController {
   }
 
   // ---- Compartido ----
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("comments/:id/read-status")
+  getReadStatus(@Param("id") id:string){
+    return this.commentsService.getReadStatus(id)
+  }
 
   @Permissions(PermissionCode.COMMENT_UPDATE)
   @Patch("comments/:id")
@@ -78,6 +79,24 @@ export class CommentsController {
     return this.commentsService.update(id,dto.message,user.id)
   }
 
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Patch("tasks/:taskId/comments/read")
+  markTaskCommentsAsRead(
+    @Param("taskId") taskId:string,
+    @CurrentUser() user:CurrentUserType,
+  ){
+    return this.commentsService.markAsRead({ scope:"task", taskId }, user.id)
+  }
+
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Patch("workflow-steps/:workflowStepId/comments/read")
+  markWorkflowStepCommentsAsRead(
+    @Param("workflowStepId") workflowStepId:string,
+    @CurrentUser() user:CurrentUserType,
+  ){
+    return this.commentsService.markAsRead({ scope:"workflowStep", workflowStepId }, user.id)
+  }
+
   @Permissions(PermissionCode.COMMENT_DELETE)
   @Delete("comments/:id")
   remove(
@@ -86,5 +105,4 @@ export class CommentsController {
   ){
     return this.commentsService.remove(id,user)
   }
-
 }

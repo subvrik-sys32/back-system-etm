@@ -24,6 +24,12 @@ export class CommentsService{
     return this.commentRepository.findAllByWorkflowStep(workflowStepId)
   }
 
+  // Estado de lectura agregado de un comentario ({ total, readCount,
+  // allRead }), usado por el front para pintar el "doble check".
+  getReadStatus(commentId:string){
+    return this.notificationsService.getCommentReadStatus(commentId)
+  }
+
   // Dispara la notificación SIN bloquear la respuesta al front. Antes,
   // el `await` acá hacía que el usuario esperara todo lo que
   // notifyComment tardara (buscar destinatarios, crear registros,
@@ -117,6 +123,13 @@ export class CommentsService{
     })
 
     return comment
+  }
+
+  markAsRead(
+    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string },
+    userId:string,
+  ){
+    return this.notificationsService.markTargetAsRead(userId,target)
   }
 
   async remove(id:string,user:CurrentUserType){
