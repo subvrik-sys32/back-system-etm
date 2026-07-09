@@ -151,6 +151,14 @@ export class NotificationRepository{
     }
   }
 
+  findUnreadCommentIdsForUser(userId:string){
+    return this.prisma.notification.findMany({
+      where:{ userId, read:false },
+      select:{ commentId:true },
+      distinct:["commentId"],
+    })
+  }
+
   delete(id:string,userId:string){
     return this.prisma.notification.deleteMany({
       where:{ id, userId },

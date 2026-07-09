@@ -82,23 +82,26 @@ export class NotificationsService{
   }
 
   async markAllAsRead(userId:string){
+
+    // Antes de marcar, averiguamos qué comentarios se van a ver
+    // afectados, para poder recalcular y publicar su doble check
+    // después. Una vez marcado como leído, ya no podríamos distinguir
+    // "estaba sin leer" de "siempre estuvo leído".
+    const unreadComments=await this.notificationRepository.findUnreadCommentIdsForUser(userId)
+
     await this.notificationRepository.markAllAsRead(userId)
+
+    for(const { commentId } of unreadComments){
+      const status=await this.getCommentReadStatus(commentId)
+      this.realtime.publish({
+        entity:"COMMENT_READ_STATUS",
+        action:"UPDATED",
+        id:commentId,
+        payload:{ commentId, ...status },
+      })
+    }
+
     return { success:true }
-  }
-
-  async remove(id:string,userId:string){
-
-    const result=await this.notificationRepository.delete(id,userId)
-    if(result.count===0)return null
-
-    this.realtime.publishToUser(userId,{
-      entity:"NOTIFICATION",
-      action:"DELETED",
-      id,
-      payload:{ id },
-    })
-
-    return { id }
 
   }
 
