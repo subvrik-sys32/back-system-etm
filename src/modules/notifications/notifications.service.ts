@@ -105,6 +105,22 @@ export class NotificationsService{
 
   }
 
+  async remove(id:string,userId:string){
+
+    const result=await this.notificationRepository.delete(id,userId)
+    if(result.count===0)return null
+
+    this.realtime.publishToUser(userId,{
+      entity:"NOTIFICATION",
+      action:"DELETED",
+      id,
+      payload:{ id },
+    })
+
+    return { id }
+
+  }
+
   async removeAll(userId:string){
 
     await this.notificationRepository.deleteAllForUser(userId)
