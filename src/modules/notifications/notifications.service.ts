@@ -73,10 +73,26 @@ export class NotificationsService{
     const total=rows.length
     const readCount=rows.filter(r=>r.read).length
 
-    return {
+    let status:"SENT"|"READ_PARTIAL"|"READ_ALL"
+
+    if(readCount===0){
+
+      status="SENT"
+
+    }else if(readCount===total){
+
+      status="READ_ALL"
+
+    }else{
+
+      status="READ_PARTIAL"
+
+    }
+
+    return{
       total,
       readCount,
-      allRead: total>0 && readCount===total,
+      status,
     }
 
   }

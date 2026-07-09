@@ -24,8 +24,13 @@ export class CommentsService{
     return this.commentRepository.findAllByWorkflowStep(workflowStepId)
   }
 
-  // Estado de lectura agregado de un comentario ({ total, readCount,
-  // allRead }), usado por el front para pintar el "doble check".
+  // Estado agregado de lectura del comentario.
+  // Devuelve el total de destinatarios, cuántos ya lo leyeron y un
+  // estado calculado:
+  //
+  // SENT          → nadie lo leyó.
+  // READ_PARTIAL  → algunos lo leyeron.
+  // READ_ALL      → todos lo leyeron.
   getReadStatus(commentId:string){
     return this.notificationsService.getCommentReadStatus(commentId)
   }
