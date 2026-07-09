@@ -66,6 +66,7 @@ export const rolePermissionsSeed = {
     "WORKFLOW_UPDATE",
 
     "MASTER_DATA_READ",
+    "MASTER_DATA_UPDATE",
 
     "USER_READ",
 
