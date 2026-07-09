@@ -114,6 +114,9 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.WORKFLOW_UPDATE,
     PermissionCode.WORKFLOW_REVIEW,
 
+    PermissionCode.MASTER_DATA_READ,
+    PermissionCode.MASTER_DATA_UPDATE,
+
     PermissionCode.USER_READ,
 
     PermissionCode.COMMENT_READ,
