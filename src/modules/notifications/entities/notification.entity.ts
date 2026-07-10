@@ -10,6 +10,11 @@ export const notificationInclude = {
       id: true,
       reference: true,
       taskNumber: true,
+      workflowSteps: {
+        select: {
+          status: true,
+        },
+      },
       project: {
         select: {
           projectCode: true,

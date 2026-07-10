@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common"
 import { NotificationRepository } from "./repositories/notification.repository"
+import { NotificationWithRelations } from "./entities/notification.entity"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { extractMentionedUsernames } from "@/modules/comments/utils/parse-mentions"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
@@ -22,15 +23,58 @@ export class NotificationsService{
     private readonly prisma:PrismaService,
   ){}
 
-  async findAllForUser(userId:string, cursor?:string, take=DEFAULT_PAGE_SIZE){
+  private enrichNotification(
+    notification:NotificationWithRelations,
+  ){
 
-    const rows=await this.notificationRepository.findAllForUser(userId,{ cursor, take })
+    const history=
+      notification.task.workflowSteps.length>0 &&
+      notification.task.workflowSteps.every(
+        step=>step.status==="REVIEWED",
+      )
+
+    return{
+
+      ...notification,
+
+      route:{
+
+        module:
+          notification.workflowStep
+            ?"processes"
+            :"tasks",
+
+        processCode:
+          notification.workflowStep?.processCode,
+
+        history,
+
+      },
+
+    }
+
+  }
+
+  async findAllForUser(userId:string,cursor?:string,take=DEFAULT_PAGE_SIZE){
+
+    const rows=await this.notificationRepository.findAllForUser(userId,{ cursor,take })
 
     const hasMore=rows.length>take
     const items=hasMore?rows.slice(0,take):rows
     const nextCursor=hasMore?items[items.length-1].id:null
 
-    return { items, nextCursor }
+    return{
+
+      items:items.map(
+        notification=>
+          this.enrichNotification(
+            notification,
+          ),
+      ),
+
+      nextCursor,
+
+    }
 
   }
 
@@ -57,12 +101,14 @@ export class NotificationsService{
         entity:"COMMENT_READ_STATUS",
         action:"UPDATED",
         id:updated.commentId,
-        payload:{ commentId:updated.commentId, ...status },
+        payload:{ commentId:updated.commentId,...status },
       })
 
     }
 
     return updated
+      ?this.enrichNotification(updated)
+      :null
 
   }
 
@@ -113,7 +159,7 @@ export class NotificationsService{
         entity:"COMMENT_READ_STATUS",
         action:"UPDATED",
         id:commentId,
-        payload:{ commentId, ...status },
+        payload:{ commentId,...status },
       })
     }
 
@@ -227,7 +273,9 @@ export class NotificationsService{
         entity:"NOTIFICATION",
         action:"CREATED",
         id:notification.id,
-        payload:notification,
+        payload:this.enrichNotification(
+          notification,
+        ),
       })
     }
 
@@ -258,7 +306,7 @@ export class NotificationsService{
         entity:"COMMENT_READ_STATUS",
         action:"UPDATED",
         id:commentId,
-        payload:{ commentId, ...status },
+        payload:{ commentId,...status },
       })
     }
 
