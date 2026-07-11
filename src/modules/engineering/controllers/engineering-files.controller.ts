@@ -23,7 +23,7 @@ interface MultipartFile {
   buffer: Buffer;
 }
 
-@Controller('api/engineering/files')
+@Controller('engineering/files')
 export class EngineeringFilesController {
   constructor(private readonly service: EngineeringFilesService) {}
 
