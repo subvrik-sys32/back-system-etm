@@ -292,6 +292,26 @@ model WorkflowStep {
   @@index([taskId])
 }
 
+enum EngineeringFileStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model EngineeringFile {
+  id           String                @id @default(cuid())
+  originalName String
+  filename     String
+  extension    String
+  mimeType     String
+  size         Int
+  status       EngineeringFileStatus @default(UPLOADING)
+  metadata     Json?                 // Aquí guardaremos las dimensiones/capas detectadas
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
 model AuditLog {
   id        String   @id @default(uuid())
   userId    String

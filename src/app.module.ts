@@ -98,71 +98,44 @@ import {
   NotificationsModule,
 } from "@/modules/notifications/notifications.module"
 
+// Importación del nuevo módulo
+import {
+  EngineeringModule,
+} from "@/modules/engineering/engineering.module"
+
 @Module({
-
-  imports:[
-
+  imports: [
     ConfigModule.forRoot({
-
-      isGlobal:true,
-
+      isGlobal: true,
     }),
-
     DatabaseModule,
-
     MonitoringModule,
-
     SeedModule,
-
     AuthModule,
-
     UsersModule,
-
     RolesModule,
-
     PermissionsModule,
-
     ClientsModule,
-
     PrioritiesModule,
-
     MaterialsModule,
-
     ThicknessesModule,
-
     ColorsModule,
-
     StagesModule,
-
     StatusesModule,
-
     ProjectsModule,
-
     TasksModule,
-
     WorkflowModule,
-
     CodeGeneratorModule,
-
     RealtimeModule,
-
     CommentsModule,
-    
     NotificationsModule,
-
+    EngineeringModule,
   ],
-
-  controllers:[
-
+  controllers: [
     AppController,
-
   ],
-
-  providers:[
-
+  providers: [
     AppService,
-
   ],
-
 })
-export class AppModule{}
+export class AppModule {}
