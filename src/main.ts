@@ -86,6 +86,27 @@ async function bootstrap() {
 
   )
 
+  app.enableCors({
+    origin: (origin, callback) => {
+      // ...tu lógica actual...
+    },
+    credentials: true,
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+    ],
+    exposedHeaders: [
+      "Content-Length", // <- así el navegador deja que fetch() lo lea
+    ],
+    methods: [
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+  })
+
 }
 
 bootstrap()
