@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreatePriorityDto,
 } from "./dto/create-priority.dto"
 
@@ -29,6 +33,9 @@ export class PrioritiesService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class PrioritiesService {
 
   async create(
     dto: CreatePriorityDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class PrioritiesService {
 
       )
 
-    return this.prisma.priority.create({
+    const priority =
+      await this.prisma.priority.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "PRIORITY",
+      action: "CREATED",
+      id: priority.id,
+      payload: priority,
+      excludeUserId: userId,
     })
+
+    return priority
 
   }
 
@@ -126,52 +145,76 @@ export class PrioritiesService {
 
     dto: UpdatePriorityDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.priority.update({
+    const priority =
+      await this.prisma.priority.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "PRIORITY",
+      action: "UPDATED",
+      id: priority.id,
+      payload: priority,
+      excludeUserId: userId,
     })
+
+    return priority
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.priority.update({
+    const priority =
+      await this.prisma.priority.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "PRIORITY",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return priority
 
   }
 

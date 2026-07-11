@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreateStageDto,
 } from "./dto/create-stage.dto"
 
@@ -29,6 +33,9 @@ export class StagesService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class StagesService {
 
   async create(
     dto: CreateStageDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class StagesService {
 
       )
 
-    return this.prisma.stage.create({
+    const stage =
+      await this.prisma.stage.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STAGE",
+      action: "CREATED",
+      id: stage.id,
+      payload: stage,
+      excludeUserId: userId,
     })
+
+    return stage
 
   }
 
@@ -126,56 +145,80 @@ export class StagesService {
 
     dto: UpdateStageDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(
       id,
     )
 
-    return this.prisma.stage.update({
+    const stage =
+      await this.prisma.stage.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STAGE",
+      action: "UPDATED",
+      id: stage.id,
+      payload: stage,
+      excludeUserId: userId,
     })
+
+    return stage
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(
       id,
     )
 
-    return this.prisma.stage.update({
+    const stage =
+      await this.prisma.stage.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STAGE",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return stage
 
   }
 

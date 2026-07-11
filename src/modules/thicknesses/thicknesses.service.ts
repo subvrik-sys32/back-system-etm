@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreateThicknessDto,
 } from "./dto/create-thickness.dto"
 
@@ -29,6 +33,9 @@ export class ThicknessesService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class ThicknessesService {
 
   async create(
     dto: CreateThicknessDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class ThicknessesService {
 
       )
 
-    return this.prisma.thickness.create({
+    const thickness =
+      await this.prisma.thickness.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "THICKNESS",
+      action: "CREATED",
+      id: thickness.id,
+      payload: thickness,
+      excludeUserId: userId,
     })
+
+    return thickness
 
   }
 
@@ -126,52 +145,76 @@ export class ThicknessesService {
 
     dto: UpdateThicknessDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.thickness.update({
+    const thickness =
+      await this.prisma.thickness.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "THICKNESS",
+      action: "UPDATED",
+      id: thickness.id,
+      payload: thickness,
+      excludeUserId: userId,
     })
+
+    return thickness
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.thickness.update({
+    const thickness =
+      await this.prisma.thickness.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "THICKNESS",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return thickness
 
   }
 

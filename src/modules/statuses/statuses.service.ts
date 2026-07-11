@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreateStatusDto,
 } from "./dto/create-status.dto"
 
@@ -29,6 +33,9 @@ export class StatusesService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class StatusesService {
 
   async create(
     dto: CreateStatusDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class StatusesService {
 
       )
 
-    return this.prisma.status.create({
+    const status =
+      await this.prisma.status.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STATUS",
+      action: "CREATED",
+      id: status.id,
+      payload: status,
+      excludeUserId: userId,
     })
+
+    return status
 
   }
 
@@ -126,56 +145,80 @@ export class StatusesService {
 
     dto: UpdateStatusDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(
       id,
     )
 
-    return this.prisma.status.update({
+    const status =
+      await this.prisma.status.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STATUS",
+      action: "UPDATED",
+      id: status.id,
+      payload: status,
+      excludeUserId: userId,
     })
+
+    return status
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(
       id,
     )
 
-    return this.prisma.status.update({
+    const status =
+      await this.prisma.status.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "STATUS",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return status
 
   }
 

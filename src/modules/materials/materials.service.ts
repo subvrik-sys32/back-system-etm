@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreateMaterialDto,
 } from "./dto/create-material.dto"
 
@@ -29,6 +33,9 @@ export class MaterialsService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class MaterialsService {
 
   async create(
     dto: CreateMaterialDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class MaterialsService {
 
       )
 
-    return this.prisma.material.create({
+    const material =
+      await this.prisma.material.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "MATERIAL",
+      action: "CREATED",
+      id: material.id,
+      payload: material,
+      excludeUserId: userId,
     })
+
+    return material
 
   }
 
@@ -126,52 +145,76 @@ export class MaterialsService {
 
     dto: UpdateMaterialDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.material.update({
+    const material =
+      await this.prisma.material.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "MATERIAL",
+      action: "UPDATED",
+      id: material.id,
+      payload: material,
+      excludeUserId: userId,
     })
+
+    return material
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.material.update({
+    const material =
+      await this.prisma.material.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "MATERIAL",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return material
 
   }
 

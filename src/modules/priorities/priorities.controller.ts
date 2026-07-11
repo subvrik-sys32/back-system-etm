@@ -34,6 +34,14 @@ import {
 } from "@/shared/decorators/permissions.decorator"
 
 import {
+  CurrentUser,
+} from "@/shared/decorators/current-user.decorator"
+
+import type {
+  CurrentUserType,
+} from "@/shared/types/current-user.types"
+
+import {
   PermissionCode,
 } from "@/core/enums/permission-code.enum"
 
@@ -81,10 +89,13 @@ export class PrioritiesController {
     @Body()
     dto:CreatePriorityDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.prioritiesService
-      .create(dto)
+      .create(dto, user.id)
 
   }
 
@@ -100,12 +111,16 @@ export class PrioritiesController {
     @Body()
     dto:UpdatePriorityDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.prioritiesService
       .update(
         id,
         dto,
+        user.id,
       )
 
   }
@@ -119,10 +134,13 @@ export class PrioritiesController {
     @Param("id")
     id:string,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.prioritiesService
-      .remove(id)
+      .remove(id, user.id)
 
   }
 

@@ -34,6 +34,14 @@ import {
 } from "@/shared/decorators/permissions.decorator"
 
 import {
+  CurrentUser,
+} from "@/shared/decorators/current-user.decorator"
+
+import type {
+  CurrentUserType,
+} from "@/shared/types/current-user.types"
+
+import {
   PermissionCode,
 } from "@/core/enums/permission-code.enum"
 
@@ -87,10 +95,13 @@ export class MaterialsController {
     @Body()
     dto:CreateMaterialDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.materialsService
-      .create(dto)
+      .create(dto, user.id)
 
   }
 
@@ -106,12 +117,16 @@ export class MaterialsController {
     @Body()
     dto:UpdateMaterialDto,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.materialsService
       .update(
         id,
         dto,
+        user.id,
       )
 
   }
@@ -125,10 +140,13 @@ export class MaterialsController {
     @Param("id")
     id:string,
 
+    @CurrentUser()
+    user:CurrentUserType,
+
   ){
 
     return this.materialsService
-      .remove(id)
+      .remove(id, user.id)
 
   }
 

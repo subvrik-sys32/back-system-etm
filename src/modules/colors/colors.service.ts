@@ -12,6 +12,10 @@ import {
 } from "@/shared/code-generator/code-generator.service"
 
 import {
+  RealtimeService,
+} from "@/modules/realtime/realtime.service"
+
+import {
   CreateColorDto,
 } from "./dto/create-color.dto"
 
@@ -29,6 +33,9 @@ export class ColorsService {
 
     private readonly codeGenerator:
       CodeGeneratorService,
+
+    private readonly realtime:
+      RealtimeService,
 
   ) {}
 
@@ -79,6 +86,7 @@ export class ColorsService {
 
   async create(
     dto: CreateColorDto,
+    userId: string,
   ) {
 
     const code =
@@ -99,24 +107,35 @@ export class ColorsService {
 
       )
 
-    return this.prisma.color.create({
+    const color =
+      await this.prisma.color.create({
 
-      data: {
+        data: {
 
-        code,
+          code,
 
-        name: dto.name.trim(),
+          name: dto.name.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active:
-          dto.active ?? true,
+          active:
+            dto.active ?? true,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "COLOR",
+      action: "CREATED",
+      id: color.id,
+      payload: color,
+      excludeUserId: userId,
     })
+
+    return color
 
   }
 
@@ -126,52 +145,76 @@ export class ColorsService {
 
     dto: UpdateColorDto,
 
+    userId: string,
+
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.color.update({
+    const color =
+      await this.prisma.color.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        name: dto.name?.trim(),
+          name: dto.name?.trim(),
 
-        icon: dto.icon,
+          icon: dto.icon,
 
-        color: dto.color,
+          color: dto.color,
 
-        active: dto.active,
+          active: dto.active,
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "COLOR",
+      action: "UPDATED",
+      id: color.id,
+      payload: color,
+      excludeUserId: userId,
     })
+
+    return color
 
   }
 
   async remove(
     id: string,
+    userId: string,
   ) {
 
     await this.findOne(id)
 
-    return this.prisma.color.update({
+    const color =
+      await this.prisma.color.update({
 
-      where: {
-        id,
-      },
+        where: {
+          id,
+        },
 
-      data: {
+        data: {
 
-        deletedAt:
-          new Date(),
+          deletedAt:
+            new Date(),
 
-      },
+        },
 
+      })
+
+    this.realtime.publish({
+      entity: "COLOR",
+      action: "DELETED",
+      id,
+      excludeUserId: userId,
     })
+
+    return color
 
   }
 
