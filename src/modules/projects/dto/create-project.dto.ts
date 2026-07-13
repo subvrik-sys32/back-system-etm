@@ -11,12 +11,12 @@ export class CreateProjectDto {
 
   @IsString()
   @Matches(
-    /^\d{2}-\d{3}-[A-Z]$/,
+    /^\d{2}-\d{3}-(?:M|E|EM)$/,
     {
-      message:"Invalid project code format",
+      message: "Project code must have the format 26-001-M, 26-001-E or 26-001-EM",
     },
   )
-  projectCode!:string
+  projectCode!: string
 
   @IsString()
   @MinLength(3)
