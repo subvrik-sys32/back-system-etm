@@ -139,7 +139,7 @@ export class TasksService{
     const routeChanged=dto.route!==undefined&&JSON.stringify(dto.route)!==JSON.stringify(exists.route)
 
     if(routeChanged&&hasWorkflowStarted(exists.workflowSteps)){
-      throw new BadRequestException("La ruta no puede modificarse porque la producción ya inició.")
+      throw new BadRequestException("La ruta no puede modificarse porque la producción ya inició o finalizó.")
     }
 
     const updateData={
