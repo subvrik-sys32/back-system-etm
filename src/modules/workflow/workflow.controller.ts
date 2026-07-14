@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   UseGuards,
@@ -17,6 +18,10 @@ import {
 import {
   UpdateWorkflowStepDto,
 } from "./dto/update-workflow-step.dto"
+
+import {
+  WORKFLOW_BUSINESS,
+} from "./business/workflow.business"
 
 import {
   JwtAuthGuard,
@@ -52,6 +57,28 @@ export class WorkflowController{
   constructor(
     private readonly workflowService:WorkflowService,
   ){}
+
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Get("requirements")
+  getRequirements(){
+
+    return Object.fromEntries(
+
+      Object.entries(WORKFLOW_BUSINESS).map(
+        ([processCode,config])=>[
+
+          processCode,
+
+          config.requiredFields,
+
+        ],
+      ),
+
+    )
+
+  }
 
   @Permissions(
     PermissionCode.WORKFLOW_UPDATE,

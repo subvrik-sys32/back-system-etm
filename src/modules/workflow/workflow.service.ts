@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common"
+import { BadRequestException, Injectable } from "@nestjs/common"
 import { WorkflowStatus } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
@@ -26,6 +26,7 @@ import {
 import {
   validateCompleted,
   validateCompletePayload,
+  validateEditable,
   validateOperatorAssigned,
   validatePaused,
   validatePending,
@@ -114,10 +115,47 @@ export class WorkflowService {
     userId: string,
   ) {
 
-    await getStepForUpdate(
+    const step = await getStepForUpdate(
       this.prisma,
       id,
     )
+
+    validateEditable(
+      step.status,
+    )
+
+    // Si se está asignando un operario, verificamos que no esté
+    // trabajando en otro proceso activo (PROGRESS) al mismo tiempo.
+    if (dto.operatorId) {
+
+      const activeStep =
+        await this.prisma.workflowStep.findFirst({
+
+          where: {
+            operatorId: dto.operatorId,
+            status: WorkflowStatus.PROGRESS,
+            id: { not: id },
+            task: {
+              deletedAt: null,
+            },
+          },
+
+          select: {
+            id: true,
+            processCode: true,
+          },
+
+        })
+
+      if (activeStep) {
+
+        throw new BadRequestException(
+          "El operario ya está trabajando en otro proceso activo.",
+        )
+
+      }
+
+    }
 
     const result = await updateWorkflowStep(
       this.prisma,
@@ -215,10 +253,12 @@ export class WorkflowService {
     )
 
     validateProgress(step.status)
+
     validateOperatorAssigned(
       step.operatorId,
       "Debe registrar un operario.",
     )
+
     validateCompletePayload(
       step.processCode,
       dto,
@@ -262,9 +302,10 @@ export class WorkflowService {
       item => item.order === step.order + 1,
     )
 
-    const eligibleNextId = nextStep && nextStep.status === WorkflowStatus.QUEUE
-      ? nextStep.id
-      : undefined
+    const eligibleNextId =
+      nextStep && nextStep.status === WorkflowStatus.QUEUE
+        ? nextStep.id
+        : undefined
 
     const result = await reviewTransaction(
       this.prisma,
@@ -297,12 +338,13 @@ export class WorkflowService {
       item => item.order === step.order + 1,
     )
 
-    const eligibleNextId = nextStep && (
-      nextStep.status === WorkflowStatus.PENDING ||
-      nextStep.status === WorkflowStatus.QUEUE
-    )
-      ? nextStep.id
-      : undefined
+    const eligibleNextId =
+      nextStep && (
+        nextStep.status === WorkflowStatus.PENDING ||
+        nextStep.status === WorkflowStatus.QUEUE
+      )
+        ? nextStep.id
+        : undefined
 
     const result = await reopenTransaction(
       this.prisma,

@@ -17,6 +17,8 @@ export async function getStepForUpdate(
 
         taskId:true,
 
+        status:true,
+
       },
 
     })

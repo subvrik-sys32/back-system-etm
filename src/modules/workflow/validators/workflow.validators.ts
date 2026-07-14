@@ -84,6 +84,29 @@ export function validateReopen(
 
 }
 
+// Un step deja de ser editable (operario, piezas, etc.) una vez que
+// se completó. A partir de ahí, cualquier corrección debe pasar por
+// "reopen" explícitamente, no por un PATCH silencioso.
+export function validateEditable(
+  status:WorkflowStatus,
+){
+
+  if(
+
+    status===WorkflowStatus.COMPLETED ||
+
+    status===WorkflowStatus.REVIEWED
+
+  ){
+
+    throw new BadRequestException(
+      "No se puede modificar un proceso ya completado.",
+    )
+
+  }
+
+}
+
 export function validateOperatorAssigned(
   operatorId:string|null,
   message:string,
