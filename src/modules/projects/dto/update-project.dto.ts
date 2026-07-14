@@ -12,12 +12,12 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   @Matches(
-    /^\d{2}-\d{3}-[A-Z]$/,
+    /^\d{2}-\d{3}-(?:M|E|EM)$/,
     {
-      message:"Invalid project code format",
+      message: "Invalid project code format",
     },
   )
-  projectCode?:string
+  projectCode?: string
 
   @IsOptional()
   @IsString()
