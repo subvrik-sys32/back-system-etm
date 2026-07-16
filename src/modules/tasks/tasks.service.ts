@@ -72,52 +72,85 @@ export class TasksService{
     return task
   }
 
-  async create(dto:CreateTaskDto,userId:string){
-    const[lastTask,totalTasks]=await Promise.all([
+  async create(
+    dto: CreateTaskDto,
+    userId: string,
+  ) {
+
+    let lotNumber = dto.lotNumber
+
+    if (lotNumber == null) {
+      lotNumber = await this.getNextLotValue(dto.projectId)
+    }
+
+    const duplicatedLot = await this.prisma.task.findFirst({
+      where: {
+        projectId: dto.projectId,
+        lotNumber,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (duplicatedLot) {
+      throw new BadRequestException(
+        `El lote L${lotNumber} ya existe para este proyecto.`,
+      )
+    }
+
+    const [lastTask, totalTasks] = await Promise.all([
       this.prisma.task.findFirst({
-        orderBy:{ taskNumber:"desc" },
+        orderBy: {
+          taskNumber: "desc",
+        },
       }),
       this.prisma.task.count({
-        where:{ deletedAt:null },
+        where: {
+          deletedAt: null,
+        },
       }),
     ])
 
-    const task=
-      await this.prisma.task.create({
-      data:{
-        taskNumber:(lastTask?.taskNumber??0)+1,
-        projectId:dto.projectId,
-        reference:dto.reference.trim(),
-        pieces:dto.pieces,
-        lotNumber:dto.lotNumber,
-        assemblyCount:dto.assemblyCount,
-        paintKg:dto.paintKg,
-        route:dto.route,
-        priorityId:dto.priorityId,
-        materialId:dto.materialId,
-        thicknessId:dto.thicknessId,
-        colorId:dto.colorId??null,
-        plRt:dto.plRt??null,
-        deliveryDate:dto.deliveryDate?new Date(dto.deliveryDate):null,
-        position:totalTasks+1,
-        createdById:userId,
-        updatedById:userId,
-        workflowSteps:{
-          create:buildWorkflow(dto.route),
+    const task = await this.prisma.task.create({
+      data: {
+        taskNumber: (lastTask?.taskNumber ?? 0) + 1,
+        projectId: dto.projectId,
+        reference: dto.reference.trim(),
+        pieces: dto.pieces,
+        lotNumber,
+        assemblyCount: dto.assemblyCount,
+        paintKg: dto.paintKg,
+        route: dto.route,
+        priorityId: dto.priorityId,
+        materialId: dto.materialId,
+        thicknessId: dto.thicknessId,
+        colorId: dto.colorId ?? null,
+        plRt: dto.plRt ?? null,
+        deliveryDate: dto.deliveryDate
+          ? new Date(dto.deliveryDate)
+          : null,
+        position: totalTasks + 1,
+        createdById: userId,
+        updatedById: userId,
+        workflowSteps: {
+          create: buildWorkflow(dto.route),
         },
       },
-      include:this.includeRelations,
+      include: this.includeRelations,
     })
 
     this.realtime.publish({
-      entity:"TASK",
-      action:"CREATED",
-      id:task.id,
-      payload:task,
-      excludeUserId:userId,
+      entity: "TASK",
+      action: "CREATED",
+      id: task.id,
+      payload: task,
+      excludeUserId: userId,
     })
 
     return task
+
   }
 
   async update(id:string,dto:UpdateTaskDto,userId:string){
@@ -261,5 +294,36 @@ export class TasksService{
     })
 
     return task
+  }
+
+  private async getNextLotValue(
+    projectId: string,
+  ): Promise<number> {
+
+    const lastTask = await this.prisma.task.findFirst({
+      where: {
+        projectId,
+        deletedAt: null,
+      },
+      orderBy: {
+        lotNumber: "desc",
+      },
+      select: {
+        lotNumber: true,
+      },
+    })
+
+    return (lastTask?.lotNumber ?? 0) + 1
+
+  }
+
+  async getNextLot(
+    projectId: string,
+  ) {
+
+    return {
+      nextLot: await this.getNextLotValue(projectId),
+    }
+
   }
 }

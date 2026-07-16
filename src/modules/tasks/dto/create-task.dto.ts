@@ -16,53 +16,55 @@ import {
 export class CreateTaskDto {
 
   @IsString()
-  projectId!:string
+  projectId!: string
 
   @IsString()
-  reference!:string
+  reference!: string
 
   @Min(1)
-  pieces!:number
+  pieces!: number
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  lotNumber?: number
 
   @Min(1)
-  lotNumber!:number
-
-  @Min(1)
-  assemblyCount!:number
+  assemblyCount!: number
 
   @IsNumber()
   @Min(0)
-  paintKg!:number
+  paintKg!: number
 
   @IsArray()
   @ArrayNotEmpty()
   @IsEnum(
     ProcessCode,
     {
-      each:true,
+      each: true,
     },
   )
-  route!:ProcessCode[]
+  route!: ProcessCode[]
 
   @IsString()
-  priorityId!:string
+  priorityId!: string
 
   @IsString()
-  materialId!:string
+  materialId!: string
 
   @IsString()
-  thicknessId!:string
-
-  @IsOptional()
-  @IsString()
-  colorId?:string
+  thicknessId!: string
 
   @IsOptional()
   @IsString()
-  plRt?:string
+  colorId?: string
+
+  @IsOptional()
+  @IsString()
+  plRt?: string
 
   @IsOptional()
   @IsDateString()
-  deliveryDate?:string
+  deliveryDate?: string
 
 }

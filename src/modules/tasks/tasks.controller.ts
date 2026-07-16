@@ -153,6 +153,17 @@ export class TasksController {
   }
 
   @Permissions(
+    PermissionCode.TASK_READ,
+  )
+  @Get("project/:projectId/next-lot")
+  getNextLot(
+    @Param("projectId")
+    projectId: string,
+  ) {
+    return this.tasksService.getNextLot(projectId)
+  }
+
+  @Permissions(
     PermissionCode.TASK_DELETE,
   )
   @Delete(":id")
