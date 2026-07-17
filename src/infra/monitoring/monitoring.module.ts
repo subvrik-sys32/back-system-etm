@@ -9,6 +9,7 @@ import {
 
 import {
   ProfilerService,
+  profilerInstance,
 } from "./profiler.service"
 
 import {
@@ -20,7 +21,18 @@ import {
 
   providers:[
 
-    ProfilerService,
+    {
+
+      provide:ProfilerService,
+
+      // Misma instancia que prisma.profiler.ts importa directo
+      // (fuera del contenedor de DI) — así las queries que loguea
+      // Prisma se suman al mismo acumulador por-request que usa
+      // RequestInterceptor, en vez de ser dos Maps separados que
+      // nunca se enteran uno del otro.
+      useValue:profilerInstance,
+
+    },
 
     {
 
