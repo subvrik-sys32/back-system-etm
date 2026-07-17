@@ -127,3 +127,14 @@ export class ProfilerService{
   }
 
 }
+
+// prisma.profiler.ts vive afuera del contenedor de DI de Nest (es
+// una extensión de Prisma, definida como const de módulo) — no
+// puede simplemente @Inject() este servicio. Compartimos esta ÚNICA
+// instancia para que las queries individuales que loguea Prisma se
+// sumen al mismo acumulador por-request que ya arma RequestInterceptor,
+// en vez de vivir como dos sistemas de profiling desconectados entre
+// sí (que es como estaban: el resumen "Queries: 0 / DB: 0.0ms" por
+// request siempre daba vacío porque nada llamaba a .record()).
+export const profilerInstance=
+  new ProfilerService()
