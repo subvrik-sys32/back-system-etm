@@ -47,6 +47,13 @@ async function bootstrap() {
       "Content-Type",
     ],
 
+    // Así el navegador deja que fetch() lea este header en la
+    // respuesta (necesario para descargas/exportaciones que leen
+    // Content-Length del lado del cliente).
+    exposedHeaders:[
+      "Content-Length",
+    ],
+
     methods:[
       "GET",
       "POST",
@@ -85,27 +92,6 @@ async function bootstrap() {
     `🚀 Backend running on port ${port}`,
 
   )
-
-  app.enableCors({
-    origin: (origin, callback) => {
-      // ...tu lógica actual...
-    },
-    credentials: true,
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-    ],
-    exposedHeaders: [
-      "Content-Length", // <- así el navegador deja que fetch() lo lea
-    ],
-    methods: [
-      "GET",
-      "POST",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
-  })
 
 }
 
