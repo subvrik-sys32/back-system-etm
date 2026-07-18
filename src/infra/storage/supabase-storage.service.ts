@@ -14,22 +14,40 @@ export class SupabaseStorageService {
 
   private readonly logger = new Logger("SupabaseStorage")
 
-  private readonly client: SupabaseClient
+  private _client: SupabaseClient | null = null
 
-  constructor() {
+  // Antes esto se creaba en el constructor — pero createClient()
+  // de Supabase TIRA una excepción de verdad si la URL viene vacía
+  // (no solo devuelve un cliente roto). Como este servicio es
+  // @Global(), un constructor que tira acá bloquea el arranque de
+  // TODA la app en NestJS, no solo lo relacionado a storage — por
+  // eso terminaba en 404 hasta en rutas que no tienen nada que ver
+  // (ej. /sidebar/counts) cuando faltaban las env vars.
+  //
+  // Ahora el cliente se crea recién en el momento de usarlo — la
+  // app arranca bien sin las variables configuradas todavía, y
+  // recién falla (con un mensaje claro) si alguien intenta subir o
+  // bajar un archivo antes de que estén seteadas.
+  private get client(): SupabaseClient {
+
+    if (this._client) {
+      return this._client
+    }
 
     const url = process.env.SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!url || !serviceRoleKey) {
 
-      this.logger.warn(
-        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY no están seteadas — la subida de avatares va a fallar hasta que se configuren.",
+      throw new Error(
+        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY no están configuradas — no se puede subir/leer archivos hasta que se seteen en las variables de entorno del backend.",
       )
 
     }
 
-    this.client = createClient(url ?? "", serviceRoleKey ?? "")
+    this._client = createClient(url, serviceRoleKey)
+
+    return this._client
 
   }
 
