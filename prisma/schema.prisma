@@ -84,7 +84,11 @@ model User {
 
 model Comment {
   id             String         @id @default(uuid())
-  taskId         String
+  taskId         String?
+  // Comentario directo sobre un proyecto (sin pasar por una tarea
+  // puntual) — para la sección de MENSAJES de Proyectos, que no
+  // tenía ningún lugar para comentarios hasta ahora.
+  projectId      String?
   workflowStepId String?
   userId         String
   message        String
@@ -95,12 +99,14 @@ model Comment {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
-  task           Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task           Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workflowStep   WorkflowStep?  @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
   user           User           @relation(fields: [userId], references: [id])
   notifications  Notification[]
 
   @@index([taskId])
+  @@index([projectId])
   @@index([workflowStepId])
 }
 
@@ -233,6 +239,7 @@ model Project {
   status       Status    @relation(fields: [statusId], references: [id])
   updatedBy    User      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   tasks        Task[]
+  comments     Comment[]
 
   @@index([clientId])
   @@index([pmId])

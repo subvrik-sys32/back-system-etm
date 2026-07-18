@@ -23,6 +23,14 @@ export class CommentRepository{
     })
   }
 
+  findAllByProject(projectId:string){
+    return this.prisma.comment.findMany({
+      where:{ projectId, deletedAt:null },
+      include:commentInclude,
+      orderBy:{ createdAt:"desc" },
+    })
+  }
+
   findById(id:string){
     return this.prisma.comment.findFirst({
       where:{ id, deletedAt:null },
@@ -48,6 +56,13 @@ export class CommentRepository{
   createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string,imageUrl?:string|null){
     return this.prisma.comment.create({
       data:{ taskId, workflowStepId, userId, message:message.trim(), imageUrl },
+      include:commentInclude,
+    })
+  }
+
+  createForProject(projectId:string,userId:string,message:string,imageUrl?:string|null){
+    return this.prisma.comment.create({
+      data:{ projectId, userId, message:message.trim(), imageUrl },
       include:commentInclude,
     })
   }

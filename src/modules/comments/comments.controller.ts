@@ -62,6 +62,23 @@ export class CommentsController {
     return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64)
   }
 
+  // ---- Nivel Proyecto ----
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("projects/:projectId/comments")
+  findAllByProject(@Param("projectId") projectId:string){
+    return this.commentsService.findAllByProject(projectId)
+  }
+
+  @Permissions(PermissionCode.COMMENT_CREATE)
+  @Post("projects/:projectId/comments")
+  createForProject(
+    @Param("projectId") projectId:string,
+    @Body() dto:CreateCommentDto,
+    @CurrentUser() user:CurrentUserType,
+  ){
+    return this.commentsService.createForProject(projectId,dto.message,user.id,dto.imageBase64)
+  }
+
   // ---- Compartido ----
   @Permissions(PermissionCode.COMMENT_READ)
   @Get("comments/:id/read-status")

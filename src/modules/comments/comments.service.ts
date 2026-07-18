@@ -30,6 +30,10 @@ export class CommentsService{
     return this.commentRepository.findAllByWorkflowStep(workflowStepId)
   }
 
+  findAllByProject(projectId:string){
+    return this.commentRepository.findAllByProject(projectId)
+  }
+
   // Estado agregado de lectura del comentario.
   // Devuelve el total de destinatarios, cuántos ya lo leyeron y un
   // estado calculado:
@@ -134,7 +138,7 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
+      { id:comment.id, taskId:comment.taskId!, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
 
@@ -169,9 +173,40 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId, workflowStepId, message:comment.message, hasImage:!!imageUrl },
+      { id:comment.id, taskId:comment.taskId!, workflowStepId, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
+
+    return comment
+  }
+
+  async createForProject(projectId:string,message:string|undefined,userId:string,imageBase64?:string){
+
+    if(!message?.trim()&&!imageBase64){
+      throw new BadRequestException("El comentario necesita texto o una foto.")
+    }
+
+    const imageUrl=
+      imageBase64
+        ?await this.uploadCommentPhoto(imageBase64)
+        :null
+
+    const comment=await this.commentRepository.createForProject(projectId,userId,message??"",imageUrl)
+
+    this.realtime.publish({
+      entity:"COMMENT",
+      action:"CREATED",
+      id:comment.id,
+      payload:comment,
+      excludeUserId:userId,
+    })
+
+    // Sin fireNotifyComment acá a propósito: notifyComment asume
+    // taskId (el modelo Notification lo tiene como obligatorio) —
+    // meterle proyectos hubiera significado tocar ESE modelo
+    // también, más grande de lo que hace falta para esto. El
+    // comentario de proyecto igual se ve en vivo por el mismo canal
+    // SSE de siempre, solo que sin generar una notificación aparte.
 
     return comment
   }
@@ -233,7 +268,7 @@ export class CommentsService{
       entity:"COMMENT",
       action:"DELETED",
       id,
-      payload:{ id, taskId:existing.taskId, workflowStepId:existing.workflowStepId },
+      payload:{ id, taskId:existing.taskId, workflowStepId:existing.workflowStepId, projectId:existing.projectId },
       excludeUserId:user.id,
     })
 
