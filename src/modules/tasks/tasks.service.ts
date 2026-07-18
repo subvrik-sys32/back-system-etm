@@ -22,13 +22,14 @@ export class TasksService{
         status:true,
         pm:{
           select:{
+            // Solo lo que se renderiza de verdad (badge con
+            // nombre+color+ícono en ProjectPicker/ProjectMobileCard)
+            // — email/active/createdAt/updatedAt no los usa nadie,
+            // confirmado antes de sacarlos.
             id:true,
-            username:true,
             name:true,
-            email:true,
-            active:true,
-            createdAt:true,
-            updatedAt:true,
+            color:true,
+            icon:true,
           },
         },
       },
@@ -38,7 +39,18 @@ export class TasksService{
     thickness:true,
     color:true,
     workflowSteps:{
-      include:{ operator:true },
+      include:{
+        // Mismo problema que "pm" más arriba: operator:true sin
+        // select devolvía passwordHash de cada operario asignado.
+        operator:{
+          select:{
+            id:true,
+            name:true,
+            color:true,
+            icon:true,
+          },
+        },
+      },
       orderBy:{ order:"asc" as const },
     },
   } satisfies Prisma.TaskInclude
@@ -104,6 +116,9 @@ export class TasksService{
       this.prisma.task.findFirst({
         orderBy: {
           taskNumber: "desc",
+        },
+        select: {
+          taskNumber: true,
         },
       }),
       this.prisma.task.count({
@@ -238,25 +253,30 @@ export class TasksService{
       ),
     )
 
-    const tasks=
-      await this.findAll()
-
+    // Antes: acá se hacía this.findAll() completo (con TODOS los
+    // includes pesados: project+client+stage+status+pm+priority+
+    // material+thickness+color+workflowSteps+operator) SOLO para
+    // poder mandar el nuevo orden por realtime — reordenar 2 tareas
+    // en un drag-and-drop disparaba el mismo payload gigante que
+    // cargar la tabla entera. Lo único que en verdad cambió es
+    // "position" en cada tarea reordenada — eso es lo único que se
+    // manda ahora.
+    //
+    // También se sacó el segundo publish (entity:"PROCESS",
+    // action:"UPDATED") que estaba acá: mandaba el mismo array de
+    // tareas, pero processHandler.ts espera un WorkflowResponse
+    // individual (lo que usan start/pause/resume/etc) — mismatch de
+    // tipos, no hacía nada útil, solo duplicaba el envío del mismo
+    // payload pesado por la red a cada cliente conectado.
     this.realtime.publish({
       entity:"TASK",
       action:"REORDERED",
       id:"bulk",
-      payload:tasks,
+      payload:items,
       excludeUserId:userId,
     })
 
-    this.realtime.publish({
-      entity:"PROCESS",
-      action:"UPDATED",
-      id:"bulk",
-      payload:tasks,
-      excludeUserId:userId,
-    })
-    return tasks
+    return items
   }
 
   async remove(id:string,userId:string){
@@ -282,13 +302,6 @@ export class TasksService{
     this.realtime.publish({
       entity:"TASK",
       action:"DELETED",
-      id,
-      excludeUserId:userId,
-    })
-
-    this.realtime.publish({
-      entity:"PROCESS",
-      action:"UPDATED",
       id,
       excludeUserId:userId,
     })

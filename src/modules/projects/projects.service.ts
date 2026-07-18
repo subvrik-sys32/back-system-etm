@@ -17,9 +17,18 @@ export class ProjectsService{
 
   private readonly includeRelations={
     client:true,
+    // ANTES: include:{role:true} sin select/omit — Prisma devuelve
+    // TODOS los campos escalares del modelo User cuando no hay
+    // select/omit explícito, incluido passwordHash. Se estaba
+    // mandando el hash de contraseña del PM al frontend en cada
+    // fetch de proyectos. select explícito con solo lo que se
+    // renderiza de verdad (badge nombre+color+ícono).
     pm:{
-      include:{
-        role:true,
+      select:{
+        id:true,
+        name:true,
+        color:true,
+        icon:true,
       },
     },
     stage:true,
@@ -54,6 +63,7 @@ export class ProjectsService{
 
     const existing=await this.prisma.project.findFirst({
       where:{ projectCode:trimmedCode, deletedAt:null },
+      select:{ id:true },
     })
 
     if(existing){
@@ -63,7 +73,10 @@ export class ProjectsService{
     }
 
     const[lastProject,totalProjects]=await Promise.all([
-      this.prisma.project.findFirst({ orderBy:{ sequence:"desc" } }),
+      this.prisma.project.findFirst({
+        orderBy:{ sequence:"desc" },
+        select:{ sequence:true },
+      }),
       this.prisma.project.count({ where:{ deletedAt:null } }),
     ])
 
@@ -97,7 +110,14 @@ export class ProjectsService{
 
   async update(id:string,dto:UpdateProjectDto,userId:string){
 
-    await this.findOne(id)
+    const exists=await this.prisma.project.findUnique({
+      where:{ id, deletedAt:null },
+      select:{ id:true },
+    })
+
+    if(!exists){
+      throw new NotFoundException("Project not found")
+    }
 
     const updateData={
       ...dto,
@@ -140,61 +160,73 @@ export class ProjectsService{
       ),
     )
 
-    const projects=await this.findAll()
-
+    // Mismo problema que tenía Tasks: acá se hacía this.findAll()
+    // completo (con client+pm+stage+status incluidos) solo para
+    // mandar el nuevo orden por realtime. El handler del frontend
+    // (project-handler.ts, caso REORDERED) solo necesita id+position
+    // de las que en verdad cambiaron.
     this.realtime.publish({
       entity:"PROJECT",
       action:"REORDERED",
       id:"bulk",
-      payload:projects,
+      payload:items,
       excludeUserId:userId,
     })
 
-    return projects
+    return items
   }
 
   async remove(id:string,userId:string){
 
-    await this.findOne(id)
+    // findOne() completo (con client+pm+stage+status) era
+    // innecesario acá — solo hace falta confirmar que exista.
+    const exists=await this.prisma.project.findUnique({
+      where:{ id },
+      select:{ id:true },
+    })
+
+    if(!exists){
+      throw new NotFoundException("Project not found")
+    }
 
     const deletedAt=new Date()
 
-    const project=
+    await this.prisma.$transaction(
 
-      await this.prisma.$transaction(
+      async tx=>{
 
-        async tx=>{
+        await tx.task.updateMany({
 
-          await tx.task.updateMany({
+          where:{
+            projectId:id,
+            deletedAt:null,
+          },
 
-            where:{
-              projectId:id,
-              deletedAt:null,
-            },
+          data:{
+            deletedAt,
+            updatedById:userId,
+          },
 
-            data:{
-              deletedAt,
-              updatedById:userId,
-            },
+        })
 
-          })
+        // Sin include acá: el publish de PROJECT/DELETED de más
+        // abajo solo manda el id (project-handler.ts, caso DELETED,
+        // solo usa event.id para sacarlo de la cache) — nadie
+        // consume las relaciones de este resultado.
+        return tx.project.update({
 
-          return tx.project.update({
+          where:{ id },
 
-            where:{ id },
+          data:{
+            deletedAt,
+            updatedById:userId,
+          },
 
-            data:{
-              deletedAt,
-              updatedById:userId,
-            },
+        })
 
-            include:this.includeRelations,
+      },
 
-          })
-
-        },
-
-      )
+    )
 
     this.realtime.publish({
 
@@ -225,7 +257,7 @@ export class ProjectsService{
 
     })
 
-    return project
+    return { id }
 
   }
 

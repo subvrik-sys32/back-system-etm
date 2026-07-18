@@ -103,6 +103,14 @@ import {
   EngineeringModule,
 } from "@/modules/engineering/engineering.module"
 
+import {
+  SidebarModule,
+} from "@/modules/sidebar/sidebar.module"
+
+import {
+  StorageModule,
+} from "@/infra/storage/storage.module"
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -130,6 +138,8 @@ import {
     CommentsModule,
     NotificationsModule,
     EngineeringModule,
+    SidebarModule,
+    StorageModule,
   ],
   controllers: [
     AppController,

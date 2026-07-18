@@ -7,6 +7,6 @@ export class UpdateAvatarDto {
 
   @IsNotEmpty()
   @IsString()
-  imageBase64?: string
+  imageBase64!: string
 
 }

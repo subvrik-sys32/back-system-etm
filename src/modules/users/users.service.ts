@@ -4,9 +4,11 @@ import {
 } from "@nestjs/common"
 
 import * as bcrypt from "bcrypt"
+import sharp from "sharp"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
 
 import { CreateUserDto } from "./dto/create-user.dto"
 import { UpdateUserDto } from "./dto/update-user.dto"
@@ -20,6 +22,7 @@ export class UsersService {
   constructor(
     private readonly prisma:PrismaService,
     private readonly realtime:RealtimeService,
+    private readonly storage:SupabaseStorageService,
   ){}
 
   async findAll(){
@@ -87,7 +90,10 @@ export class UsersService {
 
   async update(id:string,dto:UpdateUserDto,actorId?:string){
 
-    const existing=await this.prisma.user.findUnique({ where:{ id } })
+    const existing=await this.prisma.user.findUnique({
+      where:{ id },
+      select:{ id:true },
+    })
 
     if(!existing){
       throw new NotFoundException("User not found")
@@ -153,9 +159,33 @@ export class UsersService {
 
   async updateAvatar(userId:string, dto:UpdateAvatarDto, actorId?:string){
 
+    // Arreglo de raíz: antes esto guardaba la imagen COMPLETA en
+    // base64 directo en la columna avatarUrl — ese blob (varios MB
+    // en base64 para una foto de celular normal) viajaba entero en
+    // CADA fetch de /users/directory, que se pide en TODA página de
+    // la app (sidebar-presence). Ahora se comprime, se sube a
+    // Supabase Storage (mismo proyecto que ya usás para la base,
+    // sin cuenta/credenciales nuevas), y en avatarUrl queda
+    // guardada solo la URL pública — una string corta, no una
+    // imagen entera repetida en cada fetch de cada usuario.
+    const compressedBuffer=
+      await this.compressAvatar(dto.imageBase64)
+
+    // Borra los avatares viejos de este usuario ANTES de subir el
+    // nuevo — si no, cada cambio de foto deja el archivo anterior
+    // huérfano en el storage para siempre.
+    await this.storage.deleteUserAvatars(userId)
+
+    const avatarUrl=
+      await this.storage.uploadAvatar(
+        userId,
+        compressedBuffer,
+        "image/webp",
+      )
+
     const user=await this.prisma.user.update({
       where:{ id:userId },
-      data:{ avatarUrl:dto.imageBase64 },
+      data:{ avatarUrl },
       include:{ role:true },
       omit:{ passwordHash:true },
     })
@@ -172,7 +202,34 @@ export class UsersService {
 
   }
 
+  private async compressAvatar(imageBase64:string):Promise<Buffer>{
+
+    const commaIndex=imageBase64.indexOf(",")
+
+    const rawBase64=
+      commaIndex>=0
+        ?imageBase64.slice(commaIndex+1)
+        :imageBase64
+
+    const inputBuffer=
+      Buffer.from(rawBase64,"base64")
+
+    // 200x200 + WebP calidad 80: de sobra para un avatar que solo
+    // se muestra como círculo chico (24-40px) en toda la app —
+    // deja el archivo típicamente en 5-15KB.
+    return sharp(inputBuffer)
+      .resize(200,200,{
+        fit:"cover",
+        position:"centre",
+      })
+      .webp({ quality:80 })
+      .toBuffer()
+
+  }
+
   async removeAvatar(userId:string, actorId?:string){
+
+    await this.storage.deleteUserAvatars(userId)
 
     const user=await this.prisma.user.update({
       where:{ id:userId },
@@ -212,10 +269,31 @@ export class UsersService {
 
   async directory(){
 
+    // select explícito, no include+omit: antes traía CASI todos los
+    // campos del usuario (email, phone, position, roleId, createdAt,
+    // updatedAt) MÁS la relación completa "role" (con su array de
+    // permisos) — nada de eso lo usa ninguno de los consumidores
+    // reales de este endpoint (presencia del sidebar, filtros,
+    // autocompletado de @menciones, filtro de operarios en
+    // Procesos/Pipeline), que solo necesitan estos campos.
+    //
+    // role.code (un campo, no el objeto role completo) se agregó
+    // para que ProcessOperatorCell pueda filtrar "solo operarios"
+    // sin necesitar pegarle al endpoint pesado /users (protegido
+    // con USER_READ, pensado para la página de administración).
     const users=await this.prisma.user.findMany({
       where:{ deletedAt:null, active:true },
-      include:{ role:true },
-      omit:{ passwordHash:true },
+      select:{
+        id:true,
+        name:true,
+        username:true,
+        avatarUrl:true,
+        color:true,
+        icon:true,
+        role:{
+          select:{ code:true },
+        },
+      },
       orderBy:{ name:"asc" },
     })
 

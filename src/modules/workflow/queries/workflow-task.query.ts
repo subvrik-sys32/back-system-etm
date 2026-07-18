@@ -19,7 +19,14 @@ export async function getTaskWorkflowSteps(
 
         workflowSteps:{
           include:{
-            operator:true,
+            operator:{
+              select:{
+                id:true,
+                name:true,
+                color:true,
+                icon:true,
+              },
+            },
           },
           orderBy:{
             order:"asc" as const,

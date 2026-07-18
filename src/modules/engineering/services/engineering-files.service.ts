@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infra/database/prisma/prisma.service';
 import { EngineeringPipelineService } from './engineering-pipeline.service';
-import { LocalStorageService } from '../storage/local-storage.service';
+import { SupabaseStorageService } from '../../../infra/storage/supabase-storage.service';
+
+const ENGINEERING_BUCKET = 'engineering-files';
 
 interface MultipartFile {
   originalname: string;
@@ -15,7 +17,7 @@ export class EngineeringFilesService {
   constructor(
     private prisma: PrismaService,
     private pipeline: EngineeringPipelineService,
-    private storage: LocalStorageService,
+    private storage: SupabaseStorageService,
   ) {}
 
   async upload(file: MultipartFile) {
@@ -49,11 +51,12 @@ export class EngineeringFilesService {
 
   async getRawDxf(id: string): Promise<Buffer> {
     await this.findOne(id);
-    return this.storage.read(`${id}.dxf`);
+    return this.storage.downloadFile(ENGINEERING_BUCKET, `${id}.dxf`);
   }
 
   async remove(id: string) {
     await this.findOne(id);
+    await this.storage.deleteFile(ENGINEERING_BUCKET, `${id}.dxf`);
     return this.prisma.engineeringFile.delete({ where: { id } });
   }
 }
