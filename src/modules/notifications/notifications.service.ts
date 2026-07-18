@@ -10,6 +10,7 @@ type CommentContext={
   taskId:string
   workflowStepId:string|null
   message:string
+  hasImage?:boolean
 }
 
 const DEFAULT_PAGE_SIZE=20
@@ -229,9 +230,11 @@ export class NotificationsService{
         .filter(id=>id!==actorId),
     )
 
-    const snippet=comment.message.length>140
-      ?`${comment.message.slice(0,140)}...`
-      :comment.message
+    const snippet=comment.message.length>0
+      ?(comment.message.length>140
+        ?`${comment.message.slice(0,140)}...`
+        :comment.message)
+      :(comment.hasImage?"📷 Foto":"")
 
     // Si hay @menciones, el comentario deja de ser global: solo se
     // notifica a las personas mencionadas. Si no hay menciones, se

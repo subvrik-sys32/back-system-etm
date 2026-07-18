@@ -1,9 +1,14 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common"
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common"
+import { randomUUID } from "crypto"
+import sharp from "sharp"
 import { CommentRepository } from "./repositories/comment.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { NotificationsService } from "@/modules/notifications/notifications.service"
+import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
+
+const COMMENT_PHOTOS_BUCKET = "comment-photos"
 
 @Injectable()
 export class CommentsService{
@@ -14,6 +19,7 @@ export class CommentsService{
     private readonly commentRepository:CommentRepository,
     private readonly realtime:RealtimeService,
     private readonly notificationsService:NotificationsService,
+    private readonly storage:SupabaseStorageService,
   ){}
 
   findAllByTask(taskId:string){
@@ -48,7 +54,7 @@ export class CommentsService{
   // según la configuración, o like at least ensuciar los logs sin
   // contexto.
   private fireNotifyComment(
-    payload:{ id:string; taskId:string; workflowStepId:string|null; message:string },
+    payload:{ id:string; taskId:string; workflowStepId:string|null; message:string; hasImage?:boolean },
     userId:string,
   ){
 
@@ -65,9 +71,59 @@ export class CommentsService{
 
   }
 
-  async createForTask(taskId:string,message:string,userId:string){
+  // Comprime antes de subir — una foto de celular sin comprimir
+  // (varios MB) no debería viajar tal cual a Storage ni transferirse
+  // completa cada vez que se carga el historial de comentarios.
+  // 1600px de lado máximo, WebP calidad 82: de sobra para ver el
+  // detalle de lo compartido, muy por debajo del tamaño original.
+  private async uploadCommentPhoto(imageBase64:string):Promise<string>{
 
-    const comment=await this.commentRepository.createForTask(taskId,userId,message)
+    const commaIndex=imageBase64.indexOf(",")
+
+    const rawBase64=
+      commaIndex>=0
+        ?imageBase64.slice(commaIndex+1)
+        :imageBase64
+
+    const inputBuffer=
+      Buffer.from(rawBase64,"base64")
+
+    const compressed=await sharp(inputBuffer)
+      .resize(1600,1600,{
+        fit:"inside",
+        withoutEnlargement:true,
+      })
+      .webp({ quality:82 })
+      .toBuffer()
+
+    const path=`${randomUUID()}.webp`
+
+    await this.storage.uploadFile(
+      COMMENT_PHOTOS_BUCKET,
+      path,
+      compressed,
+      "image/webp",
+    )
+
+    return this.storage.getPublicUrl(
+      COMMENT_PHOTOS_BUCKET,
+      path,
+    )
+
+  }
+
+  async createForTask(taskId:string,message:string|undefined,userId:string,imageBase64?:string){
+
+    if(!message?.trim()&&!imageBase64){
+      throw new BadRequestException("El comentario necesita texto o una foto.")
+    }
+
+    const imageUrl=
+      imageBase64
+        ?await this.uploadCommentPhoto(imageBase64)
+        :null
+
+    const comment=await this.commentRepository.createForTask(taskId,userId,message??"",imageUrl)
 
     this.realtime.publish({
       entity:"COMMENT",
@@ -78,14 +134,18 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId, workflowStepId:null, message:comment.message },
+      { id:comment.id, taskId:comment.taskId, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
 
     return comment
   }
 
-  async createForWorkflowStep(workflowStepId:string,message:string,userId:string){
+  async createForWorkflowStep(workflowStepId:string,message:string|undefined,userId:string,imageBase64?:string){
+
+    if(!message?.trim()&&!imageBase64){
+      throw new BadRequestException("El comentario necesita texto o una foto.")
+    }
 
     const taskId=await this.commentRepository.getWorkflowStepTaskId(workflowStepId)
 
@@ -93,7 +153,12 @@ export class CommentsService{
       throw new NotFoundException("Workflow step not found")
     }
 
-    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message)
+    const imageUrl=
+      imageBase64
+        ?await this.uploadCommentPhoto(imageBase64)
+        :null
+
+    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message??"",imageUrl)
 
     this.realtime.publish({
       entity:"COMMENT",
@@ -104,7 +169,7 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId, workflowStepId, message:comment.message },
+      { id:comment.id, taskId:comment.taskId, workflowStepId, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
 

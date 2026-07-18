@@ -34,7 +34,7 @@ export class SupabaseStorageService {
       return this._client
     }
 
-    const url = process.env.SUPABASE_URL
+    const url = process.env.SUPABASE_URL?.replace(/\/+$/, "")
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!url || !serviceRoleKey) {
@@ -153,6 +153,16 @@ export class SupabaseStorageService {
     if (error) {
       this.logger.warn(`No se pudo borrar ${bucket}/${path}: ${error.message}`)
     }
+
+  }
+
+  getPublicUrl(bucket: string, path: string) {
+
+    const { data } = this.client.storage
+      .from(bucket)
+      .getPublicUrl(path)
+
+    return data.publicUrl
 
   }
 

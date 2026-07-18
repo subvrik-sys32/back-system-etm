@@ -38,16 +38,16 @@ export class CommentRepository{
     return step?.taskId??null
   }
 
-  createForTask(taskId:string,userId:string,message:string){
+  createForTask(taskId:string,userId:string,message:string,imageUrl?:string|null){
     return this.prisma.comment.create({
-      data:{ taskId, userId, message:message.trim(), workflowStepId:null },
+      data:{ taskId, userId, message:message.trim(), workflowStepId:null, imageUrl },
       include:commentInclude,
     })
   }
 
-  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string){
+  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string,imageUrl?:string|null){
     return this.prisma.comment.create({
-      data:{ taskId, workflowStepId, userId, message:message.trim() },
+      data:{ taskId, workflowStepId, userId, message:message.trim(), imageUrl },
       include:commentInclude,
     })
   }

@@ -42,7 +42,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForTask(taskId,dto.message,user.id)
+    return this.commentsService.createForTask(taskId,dto.message,user.id,dto.imageBase64)
   }
 
   // ---- Nivel Proceso (WorkflowStep) ----
@@ -59,7 +59,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id)
+    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64)
   }
 
   // ---- Compartido ----

@@ -88,6 +88,10 @@ model Comment {
   workflowStepId String?
   userId         String
   message        String
+  // Foto opcional adjunta al comentario — URL a Supabase Storage
+  // (mismo patrón que avatares/engineering/completion-photos),
+  // nunca base64 en la columna.
+  imageUrl        String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
