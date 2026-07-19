@@ -1,12 +1,16 @@
 // Lista default de "qué puede estar haciendo alguien" en la
 // Bitácora — arranca con esto, pero un admin la puede editar
-// después desde la app (agregar/renombrar/desactivar tipos).
+// después desde la app (agregar/renombrar/desactivar tipos, y
+// elegir cualquier ícono del catálogo completo vía el mismo
+// selector que usa Cliente). Los "icon" de acá son keys reales del
+// catálogo compartido (src/shared/constants/entity-icons.ts del
+// front), no un set propio inventado.
 export const ACTIVITY_TYPES = [
 
   {
     code: "PRODUCIENDO",
     label: "Produciendo",
-    icon: "hammer",
+    icon: "production",
     color: "#22C55E",
     order: 0,
   },
@@ -14,7 +18,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "LIMPIEZA",
     label: "Limpieza",
-    icon: "sparkles",
+    icon: "quality",
     color: "#0EA5E9",
     order: 1,
   },
@@ -22,7 +26,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "MANTENIMIENTO",
     label: "Mantenimiento de máquina",
-    icon: "wrench",
+    icon: "tool",
     color: "#F59E0B",
     order: 2,
   },
@@ -30,7 +34,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "CAPACITACION",
     label: "Capacitación",
-    icon: "graduation-cap",
+    icon: "users",
     color: "#8B5CF6",
     order: 3,
   },
@@ -38,7 +42,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "REUNION",
     label: "Reunión",
-    icon: "users",
+    icon: "clipboard",
     color: "#6366F1",
     order: 4,
   },
@@ -46,7 +50,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "ESPERA_MATERIAL",
     label: "Espera de material",
-    icon: "package",
+    icon: "material",
     color: "#EA580C",
     order: 5,
   },
@@ -54,7 +58,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "DESCANSO",
     label: "Descanso",
-    icon: "coffee",
+    icon: "pause",
     color: "#16A34A",
     order: 6,
   },
@@ -62,7 +66,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "OTRO",
     label: "Otro",
-    icon: "more-horizontal",
+    icon: "circle",
     color: "#64748B",
     order: 7,
   },
