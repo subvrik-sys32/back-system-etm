@@ -79,6 +79,15 @@ export class ActivityLogController {
     return this.activityLogService.findMyToday(user.id)
   }
 
+  @Permissions(PermissionCode.ACTIVITY_LOG_DELETE)
+  @Delete("activity-log/:id")
+  remove(
+    @Param("id") id: string,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.activityLogService.remove(id, user)
+  }
+
   @Permissions(PermissionCode.ACTIVITY_LOG_READ_ANY)
   @Get("activity-log")
   findAll(

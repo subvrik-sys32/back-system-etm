@@ -30,6 +30,7 @@ export const permissionsSeed=[
   "ACTIVITY_LOG_READ",
   "ACTIVITY_LOG_CREATE",
   "ACTIVITY_LOG_READ_ANY",
+  "ACTIVITY_LOG_DELETE",
   "ACTIVITY_TYPE_MANAGE"
 
 ]

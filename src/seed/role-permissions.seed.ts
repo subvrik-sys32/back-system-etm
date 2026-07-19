@@ -29,6 +29,7 @@ export const rolePermissionsSeed = {
     "COMMENT_DELETE_ANY",
 
     "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_DELETE",
     "ACTIVITY_LOG_READ",
     "ACTIVITY_LOG_READ_ANY",
     "ACTIVITY_TYPE_MANAGE",
@@ -58,6 +59,7 @@ export const rolePermissionsSeed = {
     "COMMENT_DELETE",
 
     "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_DELETE",
     "ACTIVITY_LOG_READ",
     "ACTIVITY_LOG_READ_ANY",
     "ACTIVITY_TYPE_MANAGE",
@@ -86,6 +88,7 @@ export const rolePermissionsSeed = {
     "COMMENT_DELETE",
 
     "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_DELETE",
     "ACTIVITY_LOG_READ",
     "ACTIVITY_LOG_READ_ANY",
   ],
@@ -109,6 +112,7 @@ export const rolePermissionsSeed = {
     "COMMENT_DELETE",
 
     "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_DELETE",
     "ACTIVITY_LOG_READ",
     "ACTIVITY_LOG_READ_ANY",
   ],
@@ -131,6 +135,7 @@ export const rolePermissionsSeed = {
     "COMMENT_DELETE",
 
     "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_DELETE",
     "ACTIVITY_LOG_READ",
   ],
 

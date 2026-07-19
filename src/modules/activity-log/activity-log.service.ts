@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
 import { DayShift } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { PermissionCode } from "@/core/enums/permission-code.enum"
+import type { CurrentUserType } from "@/shared/types/current-user.types"
 
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
@@ -189,6 +191,40 @@ export class ActivityLogService {
     })
 
     return log
+
+  }
+
+  // Elimina una entrada de bitácora. Igual que en comentarios: el
+  // dueño de la entrada siempre puede borrar la suya, y quien tenga
+  // ACTIVITY_LOG_READ_ANY... no alcanza para borrar entradas ajenas
+  // a propósito (ver/registrar todo no debería implicar poder
+  // borrar todo) — por eso se pide el permiso propio ACTIVITY_LOG_DELETE,
+  // pensado hoy como "borrar lo mío". Si más adelante se necesita
+  // que un admin borre entradas ajenas, se agrega un DELETE_ANY como
+  // en comentarios.
+  async remove(id: string, user: CurrentUserType) {
+
+    const existing = await this.prisma.activityLog.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    })
+
+    if (!existing) {
+      throw new NotFoundException("Entrada de bitácora no encontrada")
+    }
+
+    if (existing.userId !== user.id) {
+      throw new ForbiddenException("No podés eliminar una entrada de bitácora ajena.")
+    }
+
+    await this.prisma.activityLog.delete({ where: { id } })
+
+    this.realtime.publish({
+      entity: "ACTIVITY_LOG",
+      action: "DELETED",
+      id,
+      payload: { id },
+    })
 
   }
 
