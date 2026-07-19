@@ -7,14 +7,18 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
 import { UpdateActivityTypeDto } from "./dto/update-activity-type.dto"
+import { getLimaHour, getStartOfTodayInLima } from "./utils/lima-time.util"
 
 // Se calcula del lado del servidor a partir de la hora real — nunca
 // se confía en que el cliente diga "estoy en la franja de la
 // mañana", evita que alguien loguee "Mañana" a la tarde por error
-// (o a propósito).
+// (o a propósito). IMPORTANTE: se usa la hora de Lima explícitamente
+// (no date.getHours(), que depende de la TZ del servidor — el
+// servidor corre en UTC, así que usar la hora del sistema hacía que
+// casi todo cayera en "Noche" para usuarios en Perú).
 function getShiftForDate(date: Date): DayShift {
 
-  const hour = date.getHours()
+  const hour = getLimaHour(date)
 
   if (hour >= 6 && hour < 12) {
     return DayShift.MORNING
@@ -193,8 +197,7 @@ export class ActivityLogService {
   // logueado y cuáles todavía están pendientes.
   async findMyToday(userId: string) {
 
-    const startOfDay = new Date()
-    startOfDay.setHours(0, 0, 0, 0)
+    const startOfDay = getStartOfTodayInLima()
 
     return this.prisma.activityLog.findMany({
       where: {
