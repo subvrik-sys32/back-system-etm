@@ -5,13 +5,9 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { extractMentionedUsernames } from "@/modules/comments/utils/parse-mentions"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 
-type CommentContext={
-  id:string
-  taskId:string
-  workflowStepId:string|null
-  message:string
-  hasImage?:boolean
-}
+type CommentContext=
+  | { id:string; taskId:string; projectId:null; workflowStepId:string|null; message:string; hasImage?:boolean }
+  | { id:string; taskId:null; projectId:string; workflowStepId:null; message:string; hasImage?:boolean }
 
 const DEFAULT_PAGE_SIZE=20
 
@@ -28,7 +24,11 @@ export class NotificationsService{
     notification:NotificationWithRelations,
   ){
 
+    // Los comentarios de proyecto no tienen tarea (`task` es null acá):
+    // no hay noción de "historial" que aplique, así que directamente
+    // no son históricas.
     const history=
+      !!notification.task &&
       notification.task.workflowSteps.length>0 &&
       notification.task.workflowSteps.every(
         step=>step.status==="REVIEWED",
@@ -43,7 +43,9 @@ export class NotificationsService{
         module:
           notification.workflowStep
             ?"processes"
-            :"tasks",
+            :notification.task
+              ?"tasks"
+              :"projects",
 
         processCode:
           notification.workflowStep?.processCode,
@@ -236,6 +238,19 @@ export class NotificationsService{
         :comment.message)
       :(comment.hasImage?"📷 Foto":"")
 
+    // Armamos acá el trío taskId/projectId/workflowStepId correlacionado
+    // UNA sola vez. Si se accede a comment.taskId y comment.projectId
+    // por separado dentro de cada .map() de abajo, TS pierde la
+    // correlación entre ambos campos (los ensancha cada uno a
+    // `string|null` de forma independiente) y ya no calza con el tipo
+    // discriminado que espera notificationRepository.createMany.
+    const target:
+      | { taskId:string; projectId:null; workflowStepId:string|null }
+      | { taskId:null; projectId:string; workflowStepId:null } =
+      comment.taskId===null
+        ?{ taskId:null, projectId:comment.projectId, workflowStepId:null }
+        :{ taskId:comment.taskId, projectId:null, workflowStepId:comment.workflowStepId }
+
     // Si hay @menciones, el comentario deja de ser global: solo se
     // notifica a las personas mencionadas. Si no hay menciones, se
     // notifica a todos los usuarios activos (comentario global).
@@ -244,8 +259,7 @@ export class NotificationsService{
         userId,
         actorId,
         type:"MENTION" as const,
-        taskId:comment.taskId,
-        workflowStepId:comment.workflowStepId,
+        ...target,
         commentId:comment.id,
         messageSnippet:snippet,
       }))
@@ -253,8 +267,7 @@ export class NotificationsService{
         userId:u.id,
         actorId,
         type:"COMMENT" as const,
-        taskId:comment.taskId,
-        workflowStepId:comment.workflowStepId,
+        ...target,
         commentId:comment.id,
         messageSnippet:snippet,
       }))
@@ -286,12 +299,18 @@ export class NotificationsService{
 
   async markTargetAsRead(
     userId:string,
-    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string },
+    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string } | { scope:"project"; projectId:string },
   ){
 
-    const unread=target.scope==="task"
-      ?await this.notificationRepository.findUnreadByTaskId(userId,target.taskId)
-      :await this.notificationRepository.findUnreadByWorkflowStepId(userId,target.workflowStepId)
+    let unread:{ id:string; commentId:string }[]
+
+    if(target.scope==="task"){
+      unread=await this.notificationRepository.findUnreadByTaskId(userId,target.taskId)
+    }else if(target.scope==="workflowStep"){
+      unread=await this.notificationRepository.findUnreadByWorkflowStepId(userId,target.workflowStepId)
+    }else{
+      unread=await this.notificationRepository.findUnreadByProjectId(userId,target.projectId)
+    }
 
     if(unread.length===0)return { success:true }
 

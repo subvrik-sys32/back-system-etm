@@ -115,7 +115,12 @@ model Notification {
   userId         String
   actorId        String
   type           NotificationType
-  taskId         String
+  // Una notificación cuelga de una tarea O de un proyecto, nunca de
+  // ambos — mismo patrón que Comment.taskId/projectId. taskId pasa a
+  // ser opcional para poder representar menciones en comentarios de
+  // proyecto (que no tienen tarea asociada).
+  taskId         String?
+  projectId      String?
   workflowStepId String?
   commentId      String
   messageSnippet String
@@ -123,7 +128,8 @@ model Notification {
   createdAt      DateTime         @default(now())
   user           User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor          User             @relation("NotificationActor", fields: [actorId], references: [id])
-  task           Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task           Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project        Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workflowStep   WorkflowStep?    @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
   comment        Comment          @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
@@ -131,6 +137,7 @@ model Notification {
   @@index([commentId])
   @@index([userId, read, taskId])
   @@index([userId, read, workflowStepId])
+  @@index([userId, read, projectId])
 }
 
 enum NotificationType {
@@ -240,6 +247,7 @@ model Project {
   updatedBy    User      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   tasks        Task[]
   comments     Comment[]
+  notifications Notification[]
 
   @@index([clientId])
   @@index([pmId])

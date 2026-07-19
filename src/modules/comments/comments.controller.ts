@@ -114,6 +114,15 @@ export class CommentsController {
     return this.commentsService.markAsRead({ scope:"workflowStep", workflowStepId }, user.id)
   }
 
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Patch("projects/:projectId/comments/read")
+  markProjectCommentsAsRead(
+    @Param("projectId") projectId:string,
+    @CurrentUser() user:CurrentUserType,
+  ){
+    return this.commentsService.markAsRead({ scope:"project", projectId }, user.id)
+  }
+
   @Permissions(PermissionCode.COMMENT_DELETE)
   @Delete("comments/:id")
   remove(

@@ -58,7 +58,9 @@ export class CommentsService{
   // según la configuración, o like at least ensuciar los logs sin
   // contexto.
   private fireNotifyComment(
-    payload:{ id:string; taskId:string; workflowStepId:string|null; message:string; hasImage?:boolean },
+    payload:
+      | { id:string; taskId:string; projectId:null; workflowStepId:string|null; message:string; hasImage?:boolean }
+      | { id:string; taskId:null; projectId:string; workflowStepId:null; message:string; hasImage?:boolean },
     userId:string,
   ){
 
@@ -138,7 +140,7 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId!, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
+      { id:comment.id, taskId:comment.taskId!, projectId:null, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
 
@@ -173,7 +175,7 @@ export class CommentsService{
     })
 
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId!, workflowStepId, message:comment.message, hasImage:!!imageUrl },
+      { id:comment.id, taskId:comment.taskId!, projectId:null, workflowStepId, message:comment.message, hasImage:!!imageUrl },
       userId,
     )
 
@@ -201,12 +203,14 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
-    // Sin fireNotifyComment acá a propósito: notifyComment asume
-    // taskId (el modelo Notification lo tiene como obligatorio) —
-    // meterle proyectos hubiera significado tocar ESE modelo
-    // también, más grande de lo que hace falta para esto. El
-    // comentario de proyecto igual se ve en vivo por el mismo canal
-    // SSE de siempre, solo que sin generar una notificación aparte.
+    // Antes NO se notificaba acá porque el modelo Notification exigía
+    // taskId obligatorio. Ahora taskId/projectId son mutuamente
+    // excluyentes (igual que en Comment), así que un comentario de
+    // proyecto con @mención genera notificación como cualquier otro.
+    this.fireNotifyComment(
+      { id:comment.id, taskId:null, projectId:comment.projectId!, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
+      userId,
+    )
 
     return comment
   }
@@ -231,7 +235,7 @@ export class CommentsService{
   }
 
   markAsRead(
-    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string },
+    target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string } | { scope:"project"; projectId:string },
     userId:string,
   ){
     return this.notificationsService.markTargetAsRead(userId,target)

@@ -32,6 +32,13 @@ export class NotificationRepository{
     })
   }
 
+  findUnreadByProjectId(userId:string, projectId:string){
+    return this.prisma.notification.findMany({
+      where:{ userId, read:false, projectId },
+      select:{ id:true, commentId:true },
+    })
+  }
+
   markManyAsRead(ids:string[]){
     return this.prisma.notification.updateMany({
       where:{ id:{ in:ids } },
@@ -66,15 +73,17 @@ export class NotificationRepository{
     })
   }
 
-  createMany(data:{
+  createMany(data:({
     userId:string
     actorId:string
     type:"MENTION"|"COMMENT"
-    taskId:string
     workflowStepId:string|null
     commentId:string
     messageSnippet:string
-  }[]){
+  } & (
+    | { taskId:string; projectId:null }
+    | { taskId:null; projectId:string }
+  ))[]){
     return this.prisma.notification.createMany({ data })
   }
 

@@ -23,6 +23,15 @@ export const notificationInclude = {
       },
     },
   },
+  // Presente cuando la notificación viene de un comentario de
+  // proyecto (taskId null) — mismo patrón que Comment.project.
+  project: {
+    select: {
+      id: true,
+      projectCode: true,
+      name: true,
+    },
+  },
   workflowStep: {
     select: {
       id: true,
