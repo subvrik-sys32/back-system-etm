@@ -111,6 +111,10 @@ import {
   StorageModule,
 } from "@/infra/storage/storage.module"
 
+import {
+  ActivityLogModule,
+} from "@/modules/activity-log/activity-log.module"
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -140,6 +144,7 @@ import {
     EngineeringModule,
     SidebarModule,
     StorageModule,
+    ActivityLogModule,
   ],
   controllers: [
     AppController,

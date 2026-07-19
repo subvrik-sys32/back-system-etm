@@ -80,6 +80,7 @@ model User {
   comments              Comment[]
   notificationsReceived Notification[] @relation("NotificationRecipient")
   notificationsSent     Notification[] @relation("NotificationActor")
+  activityLogs          ActivityLog[]
 }
 
 model Comment {
@@ -247,6 +248,7 @@ model Project {
   updatedBy    User      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   tasks        Task[]
   comments     Comment[]
+  activityLogs ActivityLog[]
   notifications Notification[]
 
   @@index([clientId])
@@ -284,6 +286,7 @@ model Task {
   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
   workflowSteps WorkflowStep[]
   comments      Comment[]
+  activityLogs  ActivityLog[]
   notifications Notification[]
 }
 
@@ -359,4 +362,72 @@ enum WorkflowStatus {
   PAUSED
   COMPLETED
   REVIEWED
+}
+
+// Las 3 franjas del día para la Bitácora — no exige loguear cada
+// cambio de actividad, solo pide una entrada por franja ya
+// transcurrida.
+enum DayShift {
+  MORNING
+  AFTERNOON
+  NIGHT
+}
+
+// Lista editable de "qué puede estar haciendo alguien" — arranca
+// con un set default (seed), pero un admin puede agregar/editar/
+// desactivar tipos después desde la app. deletedAt en vez de borrado
+// físico: un tipo usado en logs viejos no debe desaparecer de ahí
+// aunque se lo sague de la lista activa para elegir en logs nuevos.
+model ActivityType {
+  id        String    @id @default(uuid())
+  // Opcional a propósito: solo lo usan los tipos SEEDEADOS (para
+  // poder hacer upsert idempotente por nombre conocido, ej.
+  // "LIMPIEZA"), no algo que necesite un tipo creado desde la app —
+  // ahí simplemente no tiene sentido inventarle un código a algo que
+  // nadie va a referenciar por nombre. Postgres permite múltiples
+  // NULL bajo un unique constraint sin problema.
+  code      String?   @unique
+  label     String
+  icon      String
+  color     String
+  order     Int       @default(0)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  logs      ActivityLog[]
+
+  @@index([active])
+}
+
+// Una entrada de bitácora — "en esta franja del día, esta persona
+// estuvo haciendo esto". note es opcional (texto libre, útil sobre
+// todo con el tipo "Otro"). shift se calcula server-side a partir
+// de loggedAt al crear, no lo elige el usuario a mano (evita que
+// alguien marque "Mañana" a la tarde por error).
+//
+// projectId/taskId opcionales — vinculan la entrada al trabajo REAL
+// que ya existe en el sistema (no solo texto libre), pensado sobre
+// todo para el tipo "Produciendo": permite después cruzar la
+// bitácora con Proyectos/Tareas para KPIs (tiempo real dedicado por
+// proyecto/tarea/operario, no solo lo que dice el estado del
+// workflow).
+model ActivityLog {
+  id             String       @id @default(uuid())
+  userId         String
+  activityTypeId String
+  projectId      String?
+  taskId         String?
+  note           String?
+  shift          DayShift
+  loggedAt       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id])
+  activityType   ActivityType @relation(fields: [activityTypeId], references: [id])
+  project        Project?     @relation(fields: [projectId], references: [id])
+  task           Task?        @relation(fields: [taskId], references: [id])
+
+  @@index([userId, loggedAt])
+  @@index([projectId])
+  @@index([taskId])
 }

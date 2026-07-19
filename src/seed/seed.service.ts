@@ -11,6 +11,7 @@ import {
 } from "./seed.constants"
 
 import { PRIORITIES } from "./priority.seed"
+import { ACTIVITY_TYPES } from "./activity-type.seed"
 import { MATERIALS } from "./material.seed"
 import { THICKNESSES } from "./thickness.seed"
 import { COLORS } from "./color.seed"
@@ -31,6 +32,7 @@ export class SeedService {
     await this.seedRolePermissions()
 
     await this.seedPriorities()
+    await this.seedActivityTypes()
     await this.seedMaterials()
     await this.seedThicknesses()
     await this.seedColors()
@@ -175,6 +177,34 @@ export class SeedService {
           name:priority.name,
           icon:priority.icon,
           color:priority.color,
+        },
+
+      })
+
+    }
+
+  }
+
+  private async seedActivityTypes(){
+
+    for(const type of ACTIVITY_TYPES){
+
+      await this.prisma.activityType.upsert({
+
+        where:{
+          code:type.code,
+        },
+
+        create:type,
+
+        // Solo actualiza label/icon/color/order — nunca pisa
+        // "active" acá: si un admin desactivó un tipo default desde
+        // la app, un reinicio del server no debe reactivarlo solo.
+        update:{
+          label:type.label,
+          icon:type.icon,
+          color:type.color,
+          order:type.order,
         },
 
       })

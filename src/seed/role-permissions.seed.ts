@@ -27,6 +27,11 @@ export const rolePermissionsSeed = {
     "COMMENT_UPDATE",
     "COMMENT_DELETE",
     "COMMENT_DELETE_ANY",
+
+    "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_READ",
+    "ACTIVITY_LOG_READ_ANY",
+    "ACTIVITY_TYPE_MANAGE",
   ],
 
   GERENCIA: [
@@ -51,6 +56,11 @@ export const rolePermissionsSeed = {
     "COMMENT_READ",
     "COMMENT_UPDATE",
     "COMMENT_DELETE",
+
+    "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_READ",
+    "ACTIVITY_LOG_READ_ANY",
+    "ACTIVITY_TYPE_MANAGE",
   ],
 
   PROJECT_MANAGER: [
@@ -74,6 +84,10 @@ export const rolePermissionsSeed = {
     "COMMENT_READ",
     "COMMENT_UPDATE",
     "COMMENT_DELETE",
+
+    "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_READ",
+    "ACTIVITY_LOG_READ_ANY",
   ],
 
   SUPERVISOR: [
@@ -93,6 +107,10 @@ export const rolePermissionsSeed = {
     "COMMENT_READ",
     "COMMENT_UPDATE",
     "COMMENT_DELETE",
+
+    "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_READ",
+    "ACTIVITY_LOG_READ_ANY",
   ],
 
   OPERARIO: [
@@ -111,6 +129,9 @@ export const rolePermissionsSeed = {
     "COMMENT_READ",
     "COMMENT_UPDATE",
     "COMMENT_DELETE",
+
+    "ACTIVITY_LOG_CREATE",
+    "ACTIVITY_LOG_READ",
   ],
 
 } as const
