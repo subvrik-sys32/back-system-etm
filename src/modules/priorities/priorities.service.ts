@@ -48,7 +48,7 @@ export class PrioritiesService {
       },
 
       orderBy: {
-        name: "asc",
+        createdAt: "asc",
       },
 
     })

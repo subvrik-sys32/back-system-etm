@@ -48,7 +48,7 @@ export class ThicknessesService {
       },
 
       orderBy: {
-        name: "asc",
+        createdAt: "asc",
       },
 
     })

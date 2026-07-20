@@ -48,7 +48,7 @@ export class MaterialsService {
       },
 
       orderBy: {
-        name: "asc",
+        createdAt: "asc",
       },
 
     })

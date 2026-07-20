@@ -48,7 +48,7 @@ export class StatusesService {
       },
 
       orderBy: {
-        name: "asc",
+        createdAt: "asc",
       },
 
     })

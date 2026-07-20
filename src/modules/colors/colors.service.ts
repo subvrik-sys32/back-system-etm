@@ -48,7 +48,7 @@ export class ColorsService {
       },
 
       orderBy: {
-        name: "asc",
+        createdAt: "asc",
       },
 
     })
