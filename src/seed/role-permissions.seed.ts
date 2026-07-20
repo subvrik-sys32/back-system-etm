@@ -33,6 +33,8 @@ export const rolePermissionsSeed = {
     "ACTIVITY_LOG_READ",
     "ACTIVITY_LOG_READ_ANY",
     "ACTIVITY_TYPE_MANAGE",
+
+    "ROLE_MANAGE",
   ],
 
   GERENCIA: [

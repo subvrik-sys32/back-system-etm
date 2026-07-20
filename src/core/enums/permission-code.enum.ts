@@ -28,13 +28,12 @@ export enum PermissionCode {
   COMMENT_DELETE = "COMMENT_DELETE",
   COMMENT_DELETE_ANY = "COMMENT_DELETE_ANY",
 
-  // Bitácora — cualquier usuario logueado puede crear/ver la propia;
-  // READ_ANY es para poder ver la de otros (reportes/supervisión),
-  // y MANAGE_TYPES es para poder editar la lista de actividades.
   ACTIVITY_LOG_READ = "ACTIVITY_LOG_READ",
   ACTIVITY_LOG_CREATE = "ACTIVITY_LOG_CREATE",
   ACTIVITY_LOG_READ_ANY = "ACTIVITY_LOG_READ_ANY",
   ACTIVITY_LOG_DELETE = "ACTIVITY_LOG_DELETE",
   ACTIVITY_TYPE_MANAGE = "ACTIVITY_TYPE_MANAGE",
+
+  ROLE_MANAGE = "ROLE_MANAGE"
 
 }
