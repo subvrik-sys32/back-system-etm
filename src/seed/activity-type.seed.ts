@@ -66,7 +66,7 @@ export const ACTIVITY_TYPES = [
   {
     code: "OTRO",
     label: "Otro",
-    icon: "circle",
+    icon: "eye",
     color: "#64748B",
     order: 7,
   },
