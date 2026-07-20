@@ -70,4 +70,28 @@ export class AuthController{
 
   }
 
+  // Reemite el accessToken con los permisos actuales del rol del
+  // usuario logueado. Se llama cuando llega el evento realtime de
+  // "cambiaron permisos de tu rol" — reemplaza al token viejo para
+  // que las próximas llamadas ya pasen el PermissionsGuard con los
+  // permisos al día, sin necesidad de deslogueo manual.
+  @UseGuards(
+    JwtAuthGuard,
+  )
+  @Post("refresh")
+  refresh(
+
+    @Request()
+    req:any,
+
+  ):Promise<LoginResponseDto>{
+
+    return this.authService.refresh(
+
+      req.user.id,
+
+    )
+
+  }
+
 }

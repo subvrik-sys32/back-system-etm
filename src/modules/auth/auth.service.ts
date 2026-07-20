@@ -91,6 +91,115 @@ export class AuthService{
 
     }
 
+    return this.issueSession(user)
+
+  }
+
+  // Reemite el accessToken con los permisos ACTUALES del rol del
+  // usuario, tomados de la base de datos. Se usa cuando un admin
+  // edita un rol mientras hay gente logueada con ese rol: el evento
+  // realtime les llega, y en vez de solo refrescar los stores del
+  // front (que no cambia nada del lado del backend, porque el guard
+  // de permisos solo confía en lo que venga firmado en el JWT), el
+  // front llama a este endpoint y reemplaza el token guardado por
+  // uno nuevo con los permisos al día. Requiere un accessToken
+  // válido vigente (JwtAuthGuard) — no es un "login sin password",
+  // solo renueva el contenido del token para el mismo usuario.
+  async refresh(
+
+    userId:string,
+
+  ):Promise<LoginResponseDto>{
+
+    const user=
+      await this.prisma.user.findUnique({
+
+        where:{
+          id:userId,
+        },
+
+        include:{
+
+          role:{
+
+            include:{
+
+              permissions:{
+
+                include:{
+                  permission:true,
+                },
+
+              },
+
+            },
+
+          },
+
+        },
+
+      })
+
+    if(!user){
+
+      throw new UnauthorizedException(
+        "User not found",
+      )
+
+    }
+
+    return this.issueSession(user)
+
+  }
+
+  private async issueSession(
+
+    user:{
+
+      id:string
+
+      username:string|null
+
+      name:string
+
+      email:string
+
+      icon:string
+
+      color:string
+
+      active:boolean
+
+      avatarUrl:string|null
+
+      phone:string|null
+
+      position:string|null
+
+      role:{
+
+        id:string
+
+        code:string
+
+        name:string
+
+        icon:string
+
+        color:string
+
+        active:boolean
+
+        permissions:{
+          permission:{code:string}
+        }[]
+
+      }
+
+    },
+
+  ):Promise<LoginResponseDto>{
+
     const permissions=
       user.role.permissions.map(
 
