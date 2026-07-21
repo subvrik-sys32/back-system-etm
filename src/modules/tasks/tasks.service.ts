@@ -22,10 +22,6 @@ export class TasksService{
         status:true,
         pm:{
           select:{
-            // Solo lo que se renderiza de verdad (badge con
-            // nombre+color+ícono en ProjectPicker/ProjectMobileCard)
-            // — email/active/createdAt/updatedAt no los usa nadie,
-            // confirmado antes de sacarlos.
             id:true,
             name:true,
             color:true,
@@ -40,8 +36,6 @@ export class TasksService{
     color:true,
     workflowSteps:{
       include:{
-        // Mismo problema que "pm" más arriba: operator:true sin
-        // select devolvía passwordHash de cada operario asignado.
         operator:{
           select:{
             id:true,

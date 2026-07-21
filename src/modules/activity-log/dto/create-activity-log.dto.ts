@@ -6,13 +6,9 @@ export class CreateActivityLogDto {
   @IsString()
   activityTypeId!: string
 
-  // Opcionales — vinculan la entrada a trabajo real ya existente en
-  // el sistema. Pensado sobre todo para el tipo "Produciendo", pero
-  // sin restricción a nivel de datos: cualquier tipo puede
-  // vincularse si tiene sentido.
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  projectId?: string
+  projectId!: string
 
   @IsOptional()
   @IsString()
