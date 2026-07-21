@@ -9,25 +9,46 @@ import type { CurrentUserType } from "@/shared/types/current-user.types"
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
 import { UpdateActivityTypeDto } from "./dto/update-activity-type.dto"
-import { getLimaHour, getStartOfTodayInLima } from "./utils/lima-time.util"
+import { getLimaMinutesOfDay, getStartOfTodayInLima } from "./utils/lima-time.util"
 
 // Se calcula del lado del servidor a partir de la hora real — nunca
-// se confía en que el cliente diga "estoy en la franja de la
-// mañana", evita que alguien loguee "Mañana" a la tarde por error
-// (o a propósito). IMPORTANTE: se usa la hora de Lima explícitamente
-// (no date.getHours(), que depende de la TZ del servidor — el
-// servidor corre en UTC, así que usar la hora del sistema hacía que
-// casi todo cayera en "Noche" para usuarios en Perú).
+// se confía en que el cliente diga "estoy en tal franja", evita que
+// alguien loguee una franja que no corresponde por error (o a
+// propósito). IMPORTANTE: se usa la hora de Lima explícitamente (no
+// date.getHours(), que depende de la TZ del servidor — el servidor
+// corre en UTC, así que usar la hora del sistema hacía que casi todo
+// cayera en "Noche" para usuarios en Perú).
+//
+// Franjas (ver comentario del enum DayShift en schema.prisma):
+//   < 11:00 → MORNING_1   (incluye cualquier hora antes de las 8:30,
+//                          no hay franja previa a la que asignarlo)
+//   < 13:00 → MORNING_2
+//   < 14:00 → LUNCH
+//   < 16:00 → AFTERNOON_1
+//   < 18:00 → AFTERNOON_2
+//   resto   → NIGHT
 function getShiftForDate(date: Date): DayShift {
 
-  const hour = getLimaHour(date)
+  const minutes = getLimaMinutesOfDay(date)
 
-  if (hour >= 6 && hour < 12) {
-    return DayShift.MORNING
+  if (minutes < 11 * 60) {
+    return DayShift.MORNING_1
   }
 
-  if (hour >= 12 && hour < 18) {
-    return DayShift.AFTERNOON
+  if (minutes < 13 * 60) {
+    return DayShift.MORNING_2
+  }
+
+  if (minutes < 14 * 60) {
+    return DayShift.LUNCH
+  }
+
+  if (minutes < 16 * 60) {
+    return DayShift.AFTERNOON_1
+  }
+
+  if (minutes < 18 * 60) {
+    return DayShift.AFTERNOON_2
   }
 
   return DayShift.NIGHT

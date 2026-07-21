@@ -25,6 +25,32 @@ export function getLimaHour(date: Date): number {
 }
 
 /**
+ * Minutos transcurridos desde medianoche, en hora local de Lima
+ * (0-1439). A diferencia de getLimaHour, tiene precisión de minuto
+ * — necesario porque las franjas de la Bitácora ya no caen en horas
+ * redondas (ej. la franja de la mañana arranca a las 08:30).
+ */
+export function getLimaMinutesOfDay(date: Date): number {
+
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone: LIMA_TIME_ZONE,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).format(date)
+
+  // formatted viene como "H:MM" o "HH:MM" ("24:00" posible en
+  // medianoche según el runtime, igual que en getLimaHour).
+  const [hourPart, minutePart] = formatted.split(":")
+
+  const hour = Number(hourPart) === 24 ? 0 : Number(hourPart)
+  const minute = Number(minutePart)
+
+  return hour * 60 + minute
+
+}
+
+/**
  * Medianoche (00:00) de "hoy" en hora Lima, expresada como instante
  * UTC real — para poder compararla contra loggedAt en la query de
  * Prisma.
