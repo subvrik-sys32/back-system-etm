@@ -364,12 +364,25 @@ enum WorkflowStatus {
   REVIEWED
 }
 
-// Las 3 franjas del día para la Bitácora — no exige loguear cada
-// cambio de actividad, solo pide una entrada por franja ya
-// transcurrida.
+// Las franjas del día para la Bitácora. No son 3 tercios iguales:
+// Mañana y Tarde se dividen cada una en 2 sub-franjas obligatorias
+// (para acotar el "ilimitadas actividades por franja" de antes a
+// exactamente 1 registro por sub-franja), más Almuerzo y Noche que
+// son opcionales. El agrupamiento visual (Mañana/Tarde/Noche) vive
+// en el frontend (shift-definitions.ts), no acá — acá solo están
+// las 6 franjas atómicas:
+//   MORNING_1    08:30–11:00  (obligatoria)
+//   MORNING_2    11:00–13:00  (obligatoria)
+//   LUNCH        13:00–14:00  (opcional)
+//   AFTERNOON_1  14:00–16:00  (obligatoria)
+//   AFTERNOON_2  16:00–18:00  (obligatoria)
+//   NIGHT        18:00–...    (opcional, sin hora de cierre)
 enum DayShift {
-  MORNING
-  AFTERNOON
+  MORNING_1
+  MORNING_2
+  LUNCH
+  AFTERNOON_1
+  AFTERNOON_2
   NIGHT
 }
 
