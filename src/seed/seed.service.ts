@@ -29,6 +29,7 @@ export class SeedService {
   async run() {
 
     await this.seedRoles()
+    await this.migrateLegacyRoles()
     await this.seedPermissions()
     await this.seedRolePermissions()
 
@@ -73,6 +74,86 @@ export class SeedService {
         },
 
       })
+
+    }
+
+  }
+
+  // Migración de datos de la vieja estructura de roles (donde
+  // SUPERVISOR, OPERARIO y PROJECT_MANAGER eran roles propios) a la
+  // nueva (departamentos + level). Se corre después de seedRoles()
+  // porque necesita que PRODUCCION y PROYECTOS ya existan como
+  // destino. Es idempotente: si un rol viejo ya no existe (porque
+  // ya se migró en una corrida anterior), simplemente lo salta.
+  private async migrateLegacyRoles() {
+
+    const LEGACY_TO_NEW: Record<
+      string,
+      { newCode: string; level?: JobLevel }
+    > = {
+      SUPERVISOR: {
+        newCode: RoleCode.PRODUCCION,
+        level: JobLevel.SUPERVISOR,
+      },
+      OPERARIO: {
+        newCode: RoleCode.PRODUCCION,
+        level: JobLevel.OPERARIO,
+      },
+      PROJECT_MANAGER: {
+        newCode: RoleCode.PROYECTOS,
+      },
+    }
+
+    for (const [legacyCode, mapping] of Object.entries(LEGACY_TO_NEW)) {
+
+      const legacyRole =
+        await this.prisma.role.findUnique({
+          where: { code: legacyCode },
+        })
+
+      if (!legacyRole) {
+        continue
+      }
+
+      const newRole =
+        await this.prisma.role.findUniqueOrThrow({
+          where: { code: mapping.newCode },
+        })
+
+      await this.prisma.user.updateMany({
+        where: { roleId: legacyRole.id },
+        data: {
+          roleId: newRole.id,
+          ...(mapping.level && { level: mapping.level }),
+        },
+      })
+
+      await this.prisma.role.delete({
+        where: { id: legacyRole.id },
+      })
+
+    }
+
+    // GERENCIA se elimina sin reasignar a nadie porque se confirmó
+    // que no tiene usuarios — igual lo validamos acá antes de borrar
+    // en vez de asumirlo ciegamente.
+    const gerenciaRole =
+      await this.prisma.role.findUnique({
+        where: { code: "GERENCIA" },
+      })
+
+    if (gerenciaRole) {
+
+      const usersOnGerencia =
+        await this.prisma.user.count({
+          where: { roleId: gerenciaRole.id },
+        })
+
+      if (usersOnGerencia === 0) {
+        await this.prisma.role.delete({
+          where: { id: gerenciaRole.id },
+        })
+      }
 
     }
 
