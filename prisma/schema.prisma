@@ -9,6 +9,12 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum JobLevel {
+  GENERAL
+  OPERARIO
+  SUPERVISOR
+}
+
 model Role {
   id          String           @id @default(uuid())
   name        String
@@ -59,6 +65,7 @@ model User {
   email                 String         @unique
   passwordHash          String
   roleId                String
+  level                 JobLevel       @default(GENERAL)
   active                Boolean        @default(true)
   deletedAt             DateTime?
   createdAt             DateTime       @default(now())
@@ -86,17 +93,11 @@ model User {
 model Comment {
   id             String         @id @default(uuid())
   taskId         String?
-  // Comentario directo sobre un proyecto (sin pasar por una tarea
-  // puntual) — para la sección de MENSAJES de Proyectos, que no
-  // tenía ningún lugar para comentarios hasta ahora.
   projectId      String?
   workflowStepId String?
   userId         String
   message        String
-  // Foto opcional adjunta al comentario — URL a Supabase Storage
-  // (mismo patrón que avatares/engineering/completion-photos),
-  // nunca base64 en la columna.
-  imageUrl        String?
+  imageUrl       String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
@@ -116,10 +117,6 @@ model Notification {
   userId         String
   actorId        String
   type           NotificationType
-  // Una notificación cuelga de una tarea O de un proyecto, nunca de
-  // ambos — mismo patrón que Comment.taskId/projectId. taskId pasa a
-  // ser opcional para poder representar menciones en comentarios de
-  // proyecto (que no tienen tarea asociada).
   taskId         String?
   projectId      String?
   workflowStepId String?
@@ -225,30 +222,30 @@ model Status {
 }
 
 model Project {
-  id           String    @id @default(uuid())
-  sequence     Int       @unique
-  projectCode  String
-  name         String
-  clientId     String
-  deliveryDate DateTime?
-  position     Int       @default(0)
-  createdById  String
-  updatedById  String
-  deletedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  pmId         String
-  stageId      String
-  statusId     String
-  client       Client    @relation(fields: [clientId], references: [id])
-  createdBy    User      @relation("ProjectCreatedBy", fields: [createdById], references: [id])
-  pm           User      @relation("ProjectPm", fields: [pmId], references: [id])
-  stage        Stage     @relation(fields: [stageId], references: [id])
-  status       Status    @relation(fields: [statusId], references: [id])
-  updatedBy    User      @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
-  tasks        Task[]
-  comments     Comment[]
-  activityLogs ActivityLog[]
+  id            String         @id @default(uuid())
+  sequence      Int            @unique
+  projectCode   String
+  name          String
+  clientId      String
+  deliveryDate  DateTime?
+  position      Int            @default(0)
+  createdById   String
+  updatedById   String
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  pmId          String
+  stageId       String
+  statusId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  createdBy     User           @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  pm            User           @relation("ProjectPm", fields: [pmId], references: [id])
+  stage         Stage          @relation(fields: [stageId], references: [id])
+  status        Status         @relation(fields: [statusId], references: [id])
+  updatedBy     User           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
+  tasks         Task[]
+  comments      Comment[]
+  activityLogs  ActivityLog[]
   notifications Notification[]
 
   @@index([clientId])
@@ -329,7 +326,7 @@ model EngineeringFile {
   mimeType     String
   size         Int
   status       EngineeringFileStatus @default(UPLOADING)
-  metadata     Json?                 // Aquí guardaremos las dimensiones/capas detectadas
+  metadata     Json?
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
 }
@@ -364,19 +361,6 @@ enum WorkflowStatus {
   REVIEWED
 }
 
-// Las franjas del día para la Bitácora. No son 3 tercios iguales:
-// Mañana y Tarde se dividen cada una en 2 sub-franjas obligatorias
-// (para acotar el "ilimitadas actividades por franja" de antes a
-// exactamente 1 registro por sub-franja), más Almuerzo y Noche que
-// son opcionales. El agrupamiento visual (Mañana/Tarde/Noche) vive
-// en el frontend (shift-definitions.ts), no acá — acá solo están
-// las 6 franjas atómicas:
-//   MORNING_1    08:30–11:00  (obligatoria)
-//   MORNING_2    11:00–13:00  (obligatoria)
-//   LUNCH        13:00–14:00  (opcional)
-//   AFTERNOON_1  14:00–16:00  (obligatoria)
-//   AFTERNOON_2  16:00–18:00  (obligatoria)
-//   NIGHT        18:00–...    (opcional, sin hora de cierre)
 enum DayShift {
   MORNING_1
   MORNING_2
@@ -386,45 +370,22 @@ enum DayShift {
   NIGHT
 }
 
-// Lista editable de "qué puede estar haciendo alguien" — arranca
-// con un set default (seed), pero un admin puede agregar/editar/
-// desactivar tipos después desde la app. deletedAt en vez de borrado
-// físico: un tipo usado en logs viejos no debe desaparecer de ahí
-// aunque se lo sague de la lista activa para elegir en logs nuevos.
 model ActivityType {
-  id        String    @id @default(uuid())
-  // Opcional a propósito: solo lo usan los tipos SEEDEADOS (para
-  // poder hacer upsert idempotente por nombre conocido, ej.
-  // "LIMPIEZA"), no algo que necesite un tipo creado desde la app —
-  // ahí simplemente no tiene sentido inventarle un código a algo que
-  // nadie va a referenciar por nombre. Postgres permite múltiples
-  // NULL bajo un unique constraint sin problema.
-  code      String?   @unique
+  id        String        @id @default(uuid())
+  code      String?       @unique
   label     String
   icon      String
   color     String
-  order     Int       @default(0)
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  order     Int           @default(0)
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   deletedAt DateTime?
   logs      ActivityLog[]
 
   @@index([active])
 }
 
-// Una entrada de bitácora — "en esta franja del día, esta persona
-// estuvo haciendo esto". note es opcional (texto libre, útil sobre
-// todo con el tipo "Otro"). shift se calcula server-side a partir
-// de loggedAt al crear, no lo elige el usuario a mano (evita que
-// alguien marque "Mañana" a la tarde por error).
-//
-// projectId/taskId opcionales — vinculan la entrada al trabajo REAL
-// que ya existe en el sistema (no solo texto libre), pensado sobre
-// todo para el tipo "Produciendo": permite después cruzar la
-// bitácora con Proyectos/Tareas para KPIs (tiempo real dedicado por
-// proyecto/tarea/operario, no solo lo que dice el estado del
-// workflow).
 model ActivityLog {
   id             String       @id @default(uuid())
   userId         String

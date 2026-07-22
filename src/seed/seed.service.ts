@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common"
 import * as bcrypt from "bcrypt"
+import { JobLevel } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RoleCode } from "@/core/enums/role-code.enum"
@@ -22,10 +23,10 @@ import { STATUSES } from "./status.seed"
 export class SeedService {
 
   constructor(
-    private readonly prisma:PrismaService,
-  ){}
+    private readonly prisma: PrismaService,
+  ) {}
 
-  async run(){
+  async run() {
 
     await this.seedRoles()
     await this.seedPermissions()
@@ -42,32 +43,32 @@ export class SeedService {
     await this.seedAdmin()
 
     return {
-      success:true,
+      success: true,
     }
 
   }
 
-  private async seedRoles(){
+  private async seedRoles() {
 
-    for(const role of ROLES){
+    for (const role of ROLES) {
 
       await this.prisma.role.upsert({
 
-        where:{
-          code:role.code,
+        where: {
+          code: role.code,
         },
 
-        create:role,
+        create: role,
 
-        update:{
+        update: {
 
-          name:role.name,
+          name: role.name,
 
-          icon:role.icon,
+          icon: role.icon,
 
-          color:role.color,
+          color: role.color,
 
-          active:role.active,
+          active: role.active,
 
         },
 
@@ -77,78 +78,78 @@ export class SeedService {
 
   }
 
-  private async seedPermissions(){
+  private async seedPermissions() {
 
-    for(const permission of PERMISSIONS){
+    for (const permission of PERMISSIONS) {
 
       await this.prisma.permission.upsert({
-        where:{ code:permission.code },
-        create:permission,
-        update:{},
+        where: { code: permission.code },
+        create: permission,
+        update: {},
       })
 
     }
 
   }
 
-  private async seedRolePermissions(){
+  private async seedRolePermissions() {
 
-    for(const [roleName,permissions] of Object.entries(ROLE_PERMISSIONS)){
+    for (const [roleName, permissions] of Object.entries(ROLE_PERMISSIONS)) {
 
       const role =
         await this.prisma.role.findUnique({
-          where:{ code:roleName },
+          where: { code: roleName },
         })
 
-      if(!role){
+      if (!role) {
         continue
       }
 
       const currentPermissions =
         await this.prisma.permission.findMany({
-          where:{
-            code:{
-              in:permissions as unknown as string[],
+          where: {
+            code: {
+              in: permissions as unknown as string[],
             },
           },
         })
 
       const currentPermissionIds =
         currentPermissions.map(
-          permission=>permission.id,
+          permission => permission.id,
         )
 
       await this.prisma.rolePermission.deleteMany({
 
-        where:{
+        where: {
 
-          roleId:role.id,
+          roleId: role.id,
 
-          permissionId:{
-            notIn:currentPermissionIds,
+          permissionId: {
+            notIn: currentPermissionIds,
           },
 
         },
 
       })
 
-      for(const permission of currentPermissions){
+      for (const permission of currentPermissions) {
 
         await this.prisma.rolePermission.upsert({
 
-          where:{
-            roleId_permissionId:{
-              roleId:role.id,
-              permissionId:permission.id,
+          where: {
+            roleId_permissionId: {
+              roleId: role.id,
+              permissionId: permission.id,
             },
           },
 
-          create:{
-            roleId:role.id,
-            permissionId:permission.id,
+          create: {
+            roleId: role.id,
+            permissionId: permission.id,
           },
 
-          update:{},
+          update: {},
 
         })
 
@@ -158,22 +159,22 @@ export class SeedService {
 
   }
 
-  private async seedPriorities(){
+  private async seedPriorities() {
 
-    for(const priority of PRIORITIES){
+    for (const priority of PRIORITIES) {
 
       await this.prisma.priority.upsert({
 
-        where:{
-          code:priority.code,
+        where: {
+          code: priority.code,
         },
 
-        create:priority,
+        create: priority,
 
-        update:{
-          name:priority.name,
-          icon:priority.icon,
-          color:priority.color,
+        update: {
+          name: priority.name,
+          icon: priority.icon,
+          color: priority.color,
         },
 
       })
@@ -182,23 +183,23 @@ export class SeedService {
 
   }
 
-  private async seedActivityTypes(){
+  private async seedActivityTypes() {
 
-    for(const type of ACTIVITY_TYPES){
+    for (const type of ACTIVITY_TYPES) {
 
       await this.prisma.activityType.upsert({
 
-        where:{
-          code:type.code,
+        where: {
+          code: type.code,
         },
 
-        create:type,
+        create: type,
 
-        update:{
-          label:type.label,
-          icon:type.icon,
-          color:type.color,
-          order:type.order,
+        update: {
+          label: type.label,
+          icon: type.icon,
+          color: type.color,
+          order: type.order,
         },
 
       })
@@ -207,22 +208,22 @@ export class SeedService {
 
   }
 
-  private async seedMaterials(){
+  private async seedMaterials() {
 
-    for(const material of MATERIALS){
+    for (const material of MATERIALS) {
 
       await this.prisma.material.upsert({
 
-        where:{
-          code:material.code,
+        where: {
+          code: material.code,
         },
 
-        create:material,
+        create: material,
 
-        update:{
-          name:material.name,
-          icon:material.icon,
-          color:material.color,
+        update: {
+          name: material.name,
+          icon: material.icon,
+          color: material.color,
         },
 
       })
@@ -231,22 +232,22 @@ export class SeedService {
 
   }
 
-  private async seedThicknesses(){
+  private async seedThicknesses() {
 
-    for(const thickness of THICKNESSES){
+    for (const thickness of THICKNESSES) {
 
       await this.prisma.thickness.upsert({
 
-        where:{
-          code:thickness.code,
+        where: {
+          code: thickness.code,
         },
 
-        create:thickness,
+        create: thickness,
 
-        update:{
-          name:thickness.name,
-          icon:thickness.icon,
-          color:thickness.color,
+        update: {
+          name: thickness.name,
+          icon: thickness.icon,
+          color: thickness.color,
         },
 
       })
@@ -255,22 +256,22 @@ export class SeedService {
 
   }
 
-  private async seedColors(){
+  private async seedColors() {
 
-    for(const color of COLORS){
+    for (const color of COLORS) {
 
       await this.prisma.color.upsert({
 
-        where:{
-          code:color.code,
+        where: {
+          code: color.code,
         },
 
-        create:color,
+        create: color,
 
-        update:{
-          name:color.name,
-          icon:color.icon,
-          color:color.color,
+        update: {
+          name: color.name,
+          icon: color.icon,
+          color: color.color,
         },
 
       })
@@ -279,22 +280,22 @@ export class SeedService {
 
   }
 
-  private async seedStages(){
+  private async seedStages() {
 
-    for(const stage of STAGES){
+    for (const stage of STAGES) {
 
       await this.prisma.stage.upsert({
 
-        where:{
-          code:stage.code,
+        where: {
+          code: stage.code,
         },
 
-        create:stage,
+        create: stage,
 
-        update:{
-          name:stage.name,
-          icon:stage.icon,
-          color:stage.color,
+        update: {
+          name: stage.name,
+          icon: stage.icon,
+          color: stage.color,
         },
 
       })
@@ -303,22 +304,22 @@ export class SeedService {
 
   }
 
-  private async seedStatuses(){
+  private async seedStatuses() {
 
-    for(const status of STATUSES){
+    for (const status of STATUSES) {
 
       await this.prisma.status.upsert({
 
-        where:{
-          code:status.code,
+        where: {
+          code: status.code,
         },
 
-        create:status,
+        create: status,
 
-        update:{
-          name:status.name,
-          icon:status.icon,
-          color:status.color,
+        update: {
+          name: status.name,
+          icon: status.icon,
+          color: status.color,
         },
 
       })
@@ -327,16 +328,16 @@ export class SeedService {
 
   }
 
-  private async seedAdmin(){
+  private async seedAdmin() {
 
     const adminRole =
       await this.prisma.role.findUnique({
-        where:{
-          code:RoleCode.ADMIN,
+        where: {
+          code: RoleCode.ADMIN,
         },
       })
 
-    if(!adminRole){
+    if (!adminRole) {
       throw new Error(
         "ADMIN role not found",
       )
@@ -350,26 +351,28 @@ export class SeedService {
 
     await this.prisma.user.upsert({
 
-      where:{
-        email:"admin@etmperu.com",
+      where: {
+        email: "admin@etmperu.com",
       },
 
-      create:{
-        username:"admin",
-        name:"Administrador ETM",
-        email:"admin@etmperu.com",
+      create: {
+        username: "admin",
+        name: "Administrador ETM",
+        email: "admin@etmperu.com",
         passwordHash,
-        roleId:adminRole.id,
-        icon:"user",
-        color:"#7C3AED",
+        roleId: adminRole.id,
+        level: JobLevel.GENERAL,
+        icon: "user",
+        color: "#7C3AED",
       },
 
-      update:{
-        username:"admin",
-        name:"Administrador ETM",
-        roleId:adminRole.id,
-        icon:"user",
-        color:"#7C3AED",
+      update: {
+        username: "admin",
+        name: "Administrador ETM",
+        roleId: adminRole.id,
+        level: JobLevel.GENERAL,
+        icon: "user",
+        color: "#7C3AED",
       },
 
     })

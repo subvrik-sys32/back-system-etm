@@ -1,45 +1,51 @@
 import {
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   MinLength,
 } from "class-validator"
+import { JobLevel } from "@prisma/client"
 
 export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  username?:string
+  username?: string
 
   @IsOptional()
   @IsString()
-  name?:string
+  name?: string
 
   @IsOptional()
   @IsEmail()
-  email?:string
+  email?: string
 
   @IsOptional()
   @IsString()
   @MinLength(8)
-  password?:string
+  password?: string
 
   @IsOptional()
   @IsUUID()
-  roleId?:string
+  roleId?: string
+
+  @IsOptional()
+  @IsEnum(JobLevel)
+  level?: JobLevel
 
   @IsOptional()
   @IsString()
-  icon?:string
+  icon?: string
 
   @IsOptional()
   @IsString()
-  color?:string
+  color?: string
 
   @IsOptional()
   @IsBoolean()
-  active?:boolean
+  active?: boolean
 
 }

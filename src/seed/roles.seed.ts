@@ -1,13 +1,8 @@
-export const rolesSeed=[
-
+export const rolesSeed = [
   "ADMIN",
-
-  "GERENCIA",
-
-  "PROJECT_MANAGER",
-
-  "SUPERVISOR",
-
-  "OPERARIO",
-
+  "ADMINISTRACION",
+  "INGENIERIA",
+  "PROYECTOS",
+  "PRODUCCION",
+  "LOGISTICA",
 ]
