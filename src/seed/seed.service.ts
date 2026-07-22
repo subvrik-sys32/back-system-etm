@@ -118,9 +118,6 @@ export class SeedService {
           permission=>permission.id,
         )
 
-      // Sincronización completa: borra cualquier permiso asignado
-      // al rol que ya NO esté en la constante ROLE_PERMISSIONS.
-      // Esto evita que permisos removidos queden huérfanos en la BD.
       await this.prisma.rolePermission.deleteMany({
 
         where:{
@@ -197,9 +194,6 @@ export class SeedService {
 
         create:type,
 
-        // Solo actualiza label/icon/color/order — nunca pisa
-        // "active" acá: si un admin desactivó un tipo default desde
-        // la app, un reinicio del server no debe reactivarlo solo.
         update:{
           label:type.label,
           icon:type.icon,
