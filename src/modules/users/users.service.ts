@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common"
@@ -61,6 +62,8 @@ export class UsersService {
 
   async create(dto: CreateUserDto, actorId?: string) {
 
+    await this.assertLevelMatchesRole(dto.roleId, dto.level)
+
     const passwordHash = await bcrypt.hash(dto.password, 10)
 
     const user = await this.prisma.user.create({
@@ -94,11 +97,47 @@ export class UsersService {
 
     const existing = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        roleId: true,
+        level: true,
+        role: {
+          select: { code: true },
+        },
+      },
     })
 
     if (!existing) {
       throw new NotFoundException("User not found")
+    }
+
+    // Rol efectivo tras este update: el que viene en el DTO, o si no
+    // cambian de rol, el que ya tenía el usuario.
+    const effectiveRoleId = dto.roleId ?? existing.roleId
+
+    if (dto.level) {
+      await this.assertLevelMatchesRole(effectiveRoleId, dto.level)
+    }
+
+    // Si cambian de rol a algo que no es PRODUCCION y no mandan level
+    // explícitamente, limpiamos el level viejo para no dejar un
+    // "OPERARIO"/"SUPERVISOR" colgado fuera de Producción.
+    let level = dto.level
+
+    if (
+      dto.roleId &&
+      dto.roleId !== existing.roleId &&
+      level === undefined &&
+      existing.level !== JobLevel.GENERAL
+    ) {
+      const nextRole = await this.prisma.role.findUnique({
+        where: { id: dto.roleId },
+        select: { code: true },
+      })
+
+      if (nextRole?.code !== "PRODUCCION") {
+        level = JobLevel.GENERAL
+      }
     }
 
     let passwordHash: string | undefined
@@ -114,7 +153,7 @@ export class UsersService {
         name: dto.name,
         email: dto.email,
         roleId: dto.roleId,
-        level: dto.level,
+        level,
         icon: dto.icon,
         color: dto.color,
         active: dto.active,
@@ -190,6 +229,32 @@ export class UsersService {
     })
 
     return { avatarUrl: user.avatarUrl }
+
+  }
+
+  private async assertLevelMatchesRole(
+    roleId: string | undefined,
+    level: JobLevel | undefined | null,
+  ) {
+
+    if (!level || level === JobLevel.GENERAL) {
+      return
+    }
+
+    if (!roleId) {
+      return
+    }
+
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+      select: { code: true },
+    })
+
+    if (role?.code !== "PRODUCCION") {
+      throw new BadRequestException(
+        "El sub-nivel (level) solo aplica para usuarios del departamento PRODUCCION",
+      )
+    }
 
   }
 
