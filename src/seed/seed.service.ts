@@ -357,13 +357,13 @@ export class SeedService {
     await this.prisma.user.upsert({
 
       where:{
-        email:"admin@etmsac.com",
+        email:"admin@etmperu.com",
       },
 
       create:{
         username:"admin",
         name:"Administrador ETM",
-        email:"admin@etmsac.com",
+        email:"admin@etmperu.com",
         passwordHash,
         roleId:adminRole.id,
         icon:"user",
