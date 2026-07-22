@@ -62,7 +62,12 @@ export class UsersService {
 
   async create(dto: CreateUserDto, actorId?: string) {
 
-    await this.assertLevelMatchesRole(dto.roleId, dto.level)
+    // Normalizamos si viene null desde el cliente
+    const targetLevel = (dto.level === null || dto.level === undefined) 
+      ? JobLevel.GENERAL 
+      : dto.level
+
+    await this.assertLevelMatchesRole(dto.roleId, targetLevel)
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
 
@@ -73,7 +78,7 @@ export class UsersService {
         email: dto.email,
         passwordHash,
         roleId: dto.roleId,
-        level: dto.level ?? JobLevel.GENERAL,
+        level: targetLevel,
         icon: dto.icon,
         color: dto.color,
         active: dto.active ?? true,
@@ -111,23 +116,24 @@ export class UsersService {
       throw new NotFoundException("User not found")
     }
 
-    // Rol efectivo tras este update: el que viene en el DTO, o si no
-    // cambian de rol, el que ya tenía el usuario.
+    // Rol efectivo tras este update
     const effectiveRoleId = dto.roleId ?? existing.roleId
 
-    if (dto.level) {
-      await this.assertLevelMatchesRole(effectiveRoleId, dto.level)
+    // 1. Resolver el nuevo valor de 'level'
+    let levelToUpdate: JobLevel | undefined
+
+    if (dto.level === null) {
+      // Si el frontend envía 'null' explícito, lo mapeamos a GENERAL
+      levelToUpdate = JobLevel.GENERAL
+    } else if (dto.level !== undefined) {
+      levelToUpdate = dto.level
     }
 
-    // Si cambian de rol a algo que no es PRODUCCION y no mandan level
-    // explícitamente, limpiamos el level viejo para no dejar un
-    // "OPERARIO"/"SUPERVISOR" colgado fuera de Producción.
-    let level = dto.level
-
+    // 2. Si no enviaron level pero cambiaron a un rol que NO es PRODUCCION, forzamos GENERAL
     if (
       dto.roleId &&
       dto.roleId !== existing.roleId &&
-      level === undefined &&
+      levelToUpdate === undefined &&
       existing.level !== JobLevel.GENERAL
     ) {
       const nextRole = await this.prisma.role.findUnique({
@@ -136,8 +142,13 @@ export class UsersService {
       })
 
       if (nextRole?.code !== "PRODUCCION") {
-        level = JobLevel.GENERAL
+        levelToUpdate = JobLevel.GENERAL
       }
+    }
+
+    // 3. Validar consistencia de Sub-nivel vs Rol
+    if (levelToUpdate) {
+      await this.assertLevelMatchesRole(effectiveRoleId, levelToUpdate)
     }
 
     let passwordHash: string | undefined
@@ -153,7 +164,7 @@ export class UsersService {
         name: dto.name,
         email: dto.email,
         roleId: dto.roleId,
-        level,
+        level: levelToUpdate, // Jamás será null
         icon: dto.icon,
         color: dto.color,
         active: dto.active,
