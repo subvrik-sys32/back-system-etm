@@ -288,6 +288,18 @@ export class SeedService {
 
     }
 
+    // "OTRO" quedó redundante: el propio botón "Otros" del picker ya
+    // cumple ese rol de catch-all, tener además un tipo llamado
+    // literal "Otro" adentro era confuso ("otro dentro de otros").
+    // Se sacó de ACTIVITY_TYPES — esto da de baja (soft-delete) la
+    // fila si quedó de una corrida vieja del seed, sin tocar los
+    // logs ya registrados con ese tipo (siguen viéndose igual, solo
+    // deja de poder elegirse en logs nuevos).
+    await this.prisma.activityType.updateMany({
+      where: { code: "OTRO", deletedAt: null },
+      data: { deletedAt: new Date(), active: false },
+    })
+
   }
 
   private async seedMaterials() {
