@@ -13,6 +13,7 @@ export const ACTIVITY_TYPES = [
     icon: "production",
     color: "#22C55E",
     order: 0,
+    pinned: true,
   },
 
   {
@@ -21,6 +22,7 @@ export const ACTIVITY_TYPES = [
     icon: "quality",
     color: "#0EA5E9",
     order: 1,
+    pinned: false,
   },
 
   {
@@ -29,6 +31,7 @@ export const ACTIVITY_TYPES = [
     icon: "tool",
     color: "#F59E0B",
     order: 2,
+    pinned: true,
   },
 
   {
@@ -37,6 +40,7 @@ export const ACTIVITY_TYPES = [
     icon: "users",
     color: "#8B5CF6",
     order: 3,
+    pinned: false,
   },
 
   {
@@ -45,6 +49,7 @@ export const ACTIVITY_TYPES = [
     icon: "clipboard",
     color: "#6366F1",
     order: 4,
+    pinned: false,
   },
 
   {
@@ -53,6 +58,7 @@ export const ACTIVITY_TYPES = [
     icon: "material",
     color: "#EA580C",
     order: 5,
+    pinned: false,
   },
 
   {
@@ -61,14 +67,7 @@ export const ACTIVITY_TYPES = [
     icon: "pause",
     color: "#16A34A",
     order: 6,
-  },
-
-  {
-    code: "OTRO",
-    label: "Otro",
-    icon: "eye",
-    color: "#64748B",
-    order: 7,
+    pinned: false,
   },
 
 ]

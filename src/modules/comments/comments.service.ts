@@ -1,6 +1,4 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common"
-import { randomUUID } from "crypto"
-import sharp from "sharp"
 import { CommentRepository } from "./repositories/comment.repository"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { NotificationsService } from "@/modules/notifications/notifications.service"
@@ -77,45 +75,11 @@ export class CommentsService{
 
   }
 
-  // Comprime antes de subir — una foto de celular sin comprimir
-  // (varios MB) no debería viajar tal cual a Storage ni transferirse
-  // completa cada vez que se carga el historial de comentarios.
-  // 1600px de lado máximo, WebP calidad 82: de sobra para ver el
-  // detalle de lo compartido, muy por debajo del tamaño original.
-  private async uploadCommentPhoto(imageBase64:string):Promise<string>{
-
-    const commaIndex=imageBase64.indexOf(",")
-
-    const rawBase64=
-      commaIndex>=0
-        ?imageBase64.slice(commaIndex+1)
-        :imageBase64
-
-    const inputBuffer=
-      Buffer.from(rawBase64,"base64")
-
-    const compressed=await sharp(inputBuffer)
-      .resize(1600,1600,{
-        fit:"inside",
-        withoutEnlargement:true,
-      })
-      .webp({ quality:82 })
-      .toBuffer()
-
-    const path=`${randomUUID()}.webp`
-
-    await this.storage.uploadFile(
-      COMMENT_PHOTOS_BUCKET,
-      path,
-      compressed,
-      "image/webp",
-    )
-
-    return this.storage.getPublicUrl(
-      COMMENT_PHOTOS_BUCKET,
-      path,
-    )
-
+  // Delegado al método compartido de SupabaseStorageService — la
+  // compresión/subida es idéntica para cualquier módulo que suba
+  // fotos, solo cambia el bucket destino.
+  private uploadCommentPhoto(imageBase64: string): Promise<string> {
+    return this.storage.uploadCompressedImage(COMMENT_PHOTOS_BUCKET, imageBase64)
   }
 
   async createForTask(taskId:string,message:string|undefined,userId:string,imageBase64?:string){

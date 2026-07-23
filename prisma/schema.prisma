@@ -378,6 +378,11 @@ model ActivityType {
   color     String
   order     Int           @default(0)
   active    Boolean       @default(true)
+  // Data-driven: decide si el tipo va siempre visible como botón
+  // directo en el picker o cae dentro de "Otros" — no hay ningún
+  // code hardcodeado en el front para esto, se administra 100%
+  // desde la pantalla de tipos de actividad.
+  pinned    Boolean       @default(true)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
@@ -393,6 +398,7 @@ model ActivityLog {
   projectId      String?
   taskId         String?
   note           String?
+  photoUrl       String?
   shift          DayShift
   loggedAt       DateTime     @default(now())
   createdAt      DateTime     @default(now())

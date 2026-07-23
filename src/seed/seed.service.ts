@@ -281,6 +281,7 @@ export class SeedService {
           icon: type.icon,
           color: type.color,
           order: type.order,
+          pinned: type.pinned ?? true,
         },
 
       })

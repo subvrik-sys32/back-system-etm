@@ -3,6 +3,7 @@ import { DayShift } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 
@@ -55,13 +56,22 @@ function getShiftForDate(date: Date): DayShift {
 
 }
 
+const ACTIVITY_LOG_PHOTOS_BUCKET = "activity-log-photos"
+
 @Injectable()
 export class ActivityLogService {
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly storage: SupabaseStorageService,
   ) {}
+
+  // Delegado al método compartido de SupabaseStorageService (mismo
+  // mecanismo que comentarios), con bucket propio.
+  private uploadActivityPhoto(imageBase64: string): Promise<string> {
+    return this.storage.uploadCompressedImage(ACTIVITY_LOG_PHOTOS_BUCKET, imageBase64)
+  }
 
   // ---- Tipos de actividad ----
 
@@ -90,6 +100,7 @@ export class ActivityLogService {
         icon: dto.icon,
         color: dto.color,
         order: dto.order ?? (maxOrder._max.order ?? 0) + 1,
+        pinned: dto.pinned ?? true,
       },
     })
 
@@ -181,6 +192,10 @@ export class ActivityLogService {
 
     const now = new Date()
 
+    const photoUrl = dto.photoBase64
+      ? await this.uploadActivityPhoto(dto.photoBase64)
+      : null
+
     const log = await this.prisma.activityLog.create({
       data: {
         userId,
@@ -188,6 +203,7 @@ export class ActivityLogService {
         projectId: dto.projectId,
         taskId: dto.taskId,
         note: dto.note,
+        photoUrl,
         shift: getShiftForDate(now),
         loggedAt: now,
       },

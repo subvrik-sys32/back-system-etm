@@ -1,5 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
+import { randomUUID } from "crypto"
+import sharp from "sharp"
 
 const AVATARS_BUCKET = "avatars"
 
@@ -163,6 +165,40 @@ export class SupabaseStorageService {
       .getPublicUrl(path)
 
     return data.publicUrl
+
+  }
+
+  // Comprime una imagen (data URI o base64 plano) y la sube al bucket
+  // indicado, devolviendo la URL pública. Único lugar donde vive esta
+  // lógica — antes estaba duplicada en cada módulo que necesitaba
+  // subir fotos (comentarios, bitácora, etc.); ahora todos llaman
+  // acá pasando solo su propio bucket. 1600px de lado máximo, WebP
+  // calidad 82: de sobra para ver el detalle, muy por debajo del
+  // tamaño original que manda la cámara.
+  async uploadCompressedImage(bucket: string, imageBase64: string): Promise<string> {
+
+    const commaIndex = imageBase64.indexOf(",")
+
+    const rawBase64 =
+      commaIndex >= 0
+        ? imageBase64.slice(commaIndex + 1)
+        : imageBase64
+
+    const inputBuffer = Buffer.from(rawBase64, "base64")
+
+    const compressed = await sharp(inputBuffer)
+      .resize(1600, 1600, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 82 })
+      .toBuffer()
+
+    const path = `${randomUUID()}.webp`
+
+    await this.uploadFile(bucket, path, compressed, "image/webp")
+
+    return this.getPublicUrl(bucket, path)
 
   }
 

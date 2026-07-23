@@ -23,4 +23,8 @@ export class UpdateActivityTypeDto {
   @IsBoolean()
   active?: boolean
 
+  @IsOptional()
+  @IsBoolean()
+  pinned?: boolean
+
 }
