@@ -233,19 +233,29 @@ export class TasksService{
     items: ReorderTaskItemDto[],
     userId:string,
   ){
-    await this.prisma.$transaction(
-      items.map(
-        item=>
-          this.prisma.task.update({
-            where:{
-              id:item.id,
-            },
-            data:{
-              position:item.position,
-            },
-          }),
+    if(items.length===0){
+      return items
+    }
+
+    // Mismo fix que en ProjectsService.reorder: N updates dentro de
+    // un $transaction([...]) se comían el timeout DEFAULT de Prisma
+    // de 5000ms para la transacción completa (P2028) con listas de
+    // varios ítems, tirando 500 tras ~5s de espera. Un solo UPDATE
+    // con CASE WHEN resuelve todas las posiciones en un round-trip.
+    const ids=Prisma.join(items.map(item=>item.id))
+
+    const positionCases=Prisma.join(
+      items.map(item=>
+        Prisma.sql`WHEN ${item.id} THEN ${item.position}`,
       ),
+      " ",
     )
+
+    await this.prisma.$executeRaw`
+      UPDATE "Task"
+      SET "position"=CASE "id" ${positionCases} END
+      WHERE "id" IN (${ids})
+    `
 
     // Antes: acá se hacía this.findAll() completo (con TODOS los
     // includes pesados: project+client+stage+status+pm+priority+

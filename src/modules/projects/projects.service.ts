@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common"
+import { Prisma } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
@@ -151,14 +152,35 @@ export class ProjectsService{
 
   async reorder(items:ReorderProjectItemDto[],userId:string){
 
-    await this.prisma.$transaction(
+    if(items.length===0){
+      return items
+    }
+
+    // Antes: N updates individuales dentro de un $transaction([...]).
+    // Cada UPDATE es un round-trip aparte a la DB, y el $transaction
+    // (interactiva o de array) tiene un timeout DEFAULT de Prisma de
+    // 5000ms para toda la operación. Con varios ítems (o latencia
+    // normal de red/pooler) eso se comía el timeout y tiraba
+    // PrismaClientKnownRequestError P2028 -> 500, con el request
+    // "colgado" ~5s antes de fallar.
+    //
+    // Ahora: un solo UPDATE con CASE WHEN que actualiza todas las
+    // posiciones en un único round-trip, sin importar cuántos ítems
+    // se reordenen.
+    const ids=Prisma.join(items.map(item=>item.id))
+
+    const positionCases=Prisma.join(
       items.map(item=>
-        this.prisma.project.update({
-          where:{ id:item.id },
-          data:{ position:item.position },
-        }),
+        Prisma.sql`WHEN ${item.id} THEN ${item.position}`,
       ),
+      " ",
     )
+
+    await this.prisma.$executeRaw`
+      UPDATE "Project"
+      SET "position"=CASE "id" ${positionCases} END
+      WHERE "id" IN (${ids})
+    `
 
     // Mismo problema que tenía Tasks: acá se hacía this.findAll()
     // completo (con client+pm+stage+status incluidos) solo para
