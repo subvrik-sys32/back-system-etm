@@ -147,7 +147,12 @@ export class UsersService {
         select: { code: true },
       })
 
-      if (nextRole?.code !== "PRODUCCION") {
+      if (
+        !this.isLevelAllowedForRole(
+          nextRole?.code,
+          existing.level,
+        )
+      ) {
         levelToUpdate = JobLevel.GENERAL
       }
     }
@@ -266,6 +271,39 @@ export class UsersService {
 
   }
 
+  // Departamentos que admiten sub-nivel (JobLevel) y cuáles. Antes
+  // solo PRODUCCION podía tener level != GENERAL. Ingeniería y
+  // Proyectos necesitan poder marcar SUPERVISOR (para identificar
+  // Project Managers — ver isProjectManager en el frontend), pero
+  // no OPERARIO/Área, que son un concepto exclusivo de Producción.
+  // Si mañana se suma un departamento más con sub-niveles, este es
+  // el único lugar a tocar.
+  private static readonly LEVELS_BY_ROLE: Record<string, JobLevel[]> = {
+    PRODUCCION: [JobLevel.OPERARIO, JobLevel.SUPERVISOR],
+    INGENIERIA: [JobLevel.SUPERVISOR],
+    PROYECTOS: [JobLevel.SUPERVISOR],
+  }
+
+  private isLevelAllowedForRole(
+    roleCode: string | undefined,
+    level: JobLevel | undefined | null,
+  ): boolean {
+
+    if (!level || level === JobLevel.GENERAL) {
+      return true
+    }
+
+    if (!roleCode) {
+      return false
+    }
+
+    const allowedLevels =
+      UsersService.LEVELS_BY_ROLE[roleCode]
+
+    return allowedLevels?.includes(level) ?? false
+
+  }
+
   private async assertLevelMatchesRole(
     roleId: string | undefined,
     level: JobLevel | undefined | null,
@@ -284,9 +322,9 @@ export class UsersService {
       select: { code: true },
     })
 
-    if (role?.code !== "PRODUCCION") {
+    if (!this.isLevelAllowedForRole(role?.code, level)) {
       throw new BadRequestException(
-        "El sub-nivel (level) solo aplica para usuarios del departamento PRODUCCION",
+        "El sub-nivel (level) no es válido para el departamento del usuario",
       )
     }
 
