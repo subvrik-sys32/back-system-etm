@@ -9,6 +9,13 @@ export class AuthRoleDto {
   active!: boolean
 }
 
+export class AuthAreaDto {
+  id!: string
+  code!: string
+  label!: string
+  processCode!: string | null
+}
+
 export class AuthUserDto {
   id!: string
   username!: string | null
@@ -22,6 +29,7 @@ export class AuthUserDto {
   phone!: string | null
   position!: string | null
   role!: AuthRoleDto
+  area!: AuthAreaDto | null
 }
 
 export class LoginResponseDto {

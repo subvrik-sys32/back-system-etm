@@ -10,6 +10,8 @@ import {
   UseGuards,
 } from "@nestjs/common"
 
+import { ActivityDepartment } from "@prisma/client"
+
 import { ActivityLogService } from "./activity-log.service"
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
@@ -22,6 +24,11 @@ import { CurrentUser } from "@/shared/decorators/current-user.decorator"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 
+// Acá "department" es un query param opcional, no un @Roles/@Permissions
+// nuevo — la Bitácora de Producción y la de Ingeniería comparten los
+// mismos endpoints y permisos (ACTIVITY_LOG_*), la única diferencia
+// es el filtro de datos. El chequeo de "esto es solo para
+// Ingeniería" vive en el servicio (assertEngineeringAccess), no acá.
 @UseGuards(
   JwtAuthGuard,
   PermissionsGuard,
@@ -37,8 +44,16 @@ export class ActivityLogController {
 
   @Permissions(PermissionCode.ACTIVITY_LOG_READ)
   @Get("activity-types")
-  findAllTypes(@Query("includeInactive") includeInactive?: string) {
-    return this.activityLogService.findAllTypes(includeInactive === "1")
+  findAllTypes(
+    @Query("includeInactive") includeInactive?: string,
+    @Query("department") department?: ActivityDepartment,
+    @CurrentUser() user?: CurrentUserType,
+  ) {
+    return this.activityLogService.findAllTypes(
+      includeInactive === "1",
+      department,
+      user?.role,
+    )
   }
 
   @Permissions(PermissionCode.ACTIVITY_TYPE_MANAGE)
@@ -70,13 +85,16 @@ export class ActivityLogController {
     @Body() dto: CreateActivityLogDto,
     @CurrentUser() user: CurrentUserType,
   ) {
-    return this.activityLogService.create(user.id, dto)
+    return this.activityLogService.create(user.id, dto, user.role)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_READ)
   @Get("activity-log/me/today")
-  findMyToday(@CurrentUser() user: CurrentUserType) {
-    return this.activityLogService.findMyToday(user.id)
+  findMyToday(
+    @CurrentUser() user: CurrentUserType,
+    @Query("department") department?: ActivityDepartment,
+  ) {
+    return this.activityLogService.findMyToday(user.id, department, user.role)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_DELETE)
@@ -91,11 +109,13 @@ export class ActivityLogController {
   @Permissions(PermissionCode.ACTIVITY_LOG_READ_ANY)
   @Get("activity-log")
   findAll(
+    @CurrentUser() user: CurrentUserType,
     @Query("userId") userId?: string,
     @Query("projectId") projectId?: string,
     @Query("taskId") taskId?: string,
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("department") department?: ActivityDepartment,
   ) {
     return this.activityLogService.findAll({
       userId,
@@ -103,6 +123,8 @@ export class ActivityLogController {
       taskId,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
+      department,
+      role: user.role,
     })
   }
 

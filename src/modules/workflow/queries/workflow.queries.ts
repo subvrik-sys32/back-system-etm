@@ -76,6 +76,11 @@ export async function getStepForComplete(
       status:true,
       operatorId:true,
       processCode:true,
+      task:{
+        select:{
+          projectId:true,
+        },
+      },
     },
   })
 

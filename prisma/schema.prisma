@@ -15,6 +15,25 @@ enum JobLevel {
   SUPERVISOR
 }
 
+// Área de trabajo dentro de un departamento (hoy: las 6 de
+// Producción, una por ProcessCode). Deliberadamente NO es un enum
+// fijo ni un alias de ProcessCode — vive en su propia tabla para
+// que Ingeniería (o cualquier otro departamento futuro) pueda tener
+// sus propias áreas sin necesitar otra migración. processCode queda
+// nullable a propósito: solo las áreas de Producción lo usan hoy
+// para filtrar WorkflowStep por proceso; las de otros departamentos
+// (a futuro) simplemente no lo setean.
+model Area {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  label       String
+  processCode ProcessCode?
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  users       User[]
+}
+
 model Role {
   id          String           @id @default(uuid())
   name        String
@@ -66,6 +85,7 @@ model User {
   passwordHash          String
   roleId                String
   level                 JobLevel       @default(GENERAL)
+  areaId                String?
   active                Boolean        @default(true)
   deletedAt             DateTime?
   createdAt             DateTime       @default(now())
@@ -83,6 +103,7 @@ model User {
   createdTasks          Task[]         @relation("TaskCreatedBy")
   updatedTasks          Task[]         @relation("TaskUpdatedBy")
   role                  Role           @relation(fields: [roleId], references: [id])
+  area                  Area?          @relation(fields: [areaId], references: [id])
   workflowSteps         WorkflowStep[]
   comments              Comment[]
   notificationsReceived Notification[] @relation("NotificationRecipient")
@@ -306,6 +327,7 @@ model WorkflowStep {
   task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   comments      Comment[]
   notifications Notification[]
+  activityLog   ActivityLog?
 
   @@unique([taskId, processCode])
   @@index([taskId])
@@ -370,44 +392,72 @@ enum DayShift {
   NIGHT
 }
 
+// PRODUCCION: la bitácora actual (turnos, franjas, registro manual
+// + automático al completar tareas). INGENIERIA: bitácora nueva,
+// mismo motor, 100% manual, solo visible para ese equipo.
+enum ActivityDepartment {
+  PRODUCCION
+  INGENIERIA
+}
+
+// MANUAL: lo registra la persona a mano (como siempre).
+// AUTO: lo genera el sistema al completar un WorkflowStep — no
+// pasa por la regla de franja horaria, es un registro aparte.
+enum ActivityLogSource {
+  MANUAL
+  AUTO
+}
+
 model ActivityType {
-  id        String        @id @default(uuid())
-  code      String?       @unique
-  label     String
-  icon      String
-  color     String
-  order     Int           @default(0)
-  active    Boolean       @default(true)
+  id         String             @id @default(uuid())
+  code       String?            @unique
+  label      String
+  icon       String
+  color      String
+  order      Int                @default(0)
+  active     Boolean            @default(true)
   // Data-driven: decide si el tipo va siempre visible como botón
   // directo en el picker o cae dentro de "Otros" — no hay ningún
   // code hardcodeado en el front para esto, se administra 100%
   // desde la pantalla de tipos de actividad.
-  pinned    Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  deletedAt DateTime?
-  logs      ActivityLog[]
+  pinned     Boolean            @default(true)
+  department ActivityDepartment @default(PRODUCCION)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  deletedAt  DateTime?
+  logs       ActivityLog[]
 
   @@index([active])
+  @@index([department])
 }
 
 model ActivityLog {
-  id             String       @id @default(uuid())
+  id             String            @id @default(uuid())
   userId         String
   activityTypeId String
   projectId      String?
   taskId         String?
+  // Solo se llena cuando source=AUTO — el WorkflowStep que disparó
+  // este registro. Constraint único: como mucho un log AUTO por
+  // step (evita duplicados si WorkflowService.complete() se llegara
+  // a invocar dos veces sobre el mismo step).
+  workflowStepId String?           @unique
   note           String?
   photoUrl       String?
-  shift          DayShift
-  loggedAt       DateTime     @default(now())
-  createdAt      DateTime     @default(now())
-  user           User         @relation(fields: [userId], references: [id])
-  activityType   ActivityType @relation(fields: [activityTypeId], references: [id])
-  project        Project?     @relation(fields: [projectId], references: [id])
-  task           Task?        @relation(fields: [taskId], references: [id])
+  // Nullable: los registros AUTO no pertenecen a ninguna franja
+  // horaria manual, no tiene sentido asignarles una.
+  shift          DayShift?
+  source         ActivityLogSource @default(MANUAL)
+  loggedAt       DateTime          @default(now())
+  createdAt      DateTime          @default(now())
+  user           User              @relation(fields: [userId], references: [id])
+  activityType   ActivityType      @relation(fields: [activityTypeId], references: [id])
+  project        Project?          @relation(fields: [projectId], references: [id])
+  task           Task?             @relation(fields: [taskId], references: [id])
+  workflowStep   WorkflowStep?     @relation(fields: [workflowStepId], references: [id])
 
   @@index([userId, loggedAt])
   @@index([projectId])
   @@index([taskId])
+  @@index([source])
 }

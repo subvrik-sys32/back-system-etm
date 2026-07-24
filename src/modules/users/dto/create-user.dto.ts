@@ -32,6 +32,13 @@ export class CreateUserDto {
   @IsEnum(JobLevel)
   level?: JobLevel
 
+  // null explícito para el caso "OPERARIO pero todavía sin área
+  // elegida" — @IsOptional() de class-validator ya deja pasar null
+  // sin validarlo como UUID.
+  @IsOptional()
+  @IsUUID()
+  areaId?: string | null
+
   @IsString()
   icon!: string
 

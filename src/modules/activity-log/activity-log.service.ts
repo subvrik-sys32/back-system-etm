@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
-import { DayShift } from "@prisma/client"
+import { ActivityDepartment, DayShift } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
@@ -75,12 +75,32 @@ export class ActivityLogService {
 
   // ---- Tipos de actividad ----
 
-  findAllTypes(includeInactive = false) {
+  // La Bitácora de Ingeniería es solo para ese equipo — a
+  // diferencia del resto de la bitácora (compartida por cualquiera
+  // con el permiso), acá el permiso no alcanza: se valida también
+  // el rol. ADMIN pasa siempre (mismo criterio que el resto del
+  // sistema: ve todo).
+  private assertEngineeringAccess(role: string) {
+
+    if (role !== "ADMIN" && role !== "INGENIERIA") {
+      throw new ForbiddenException(
+        "La Bitácora de Ingeniería es solo para ese equipo.",
+      )
+    }
+
+  }
+
+  findAllTypes(includeInactive = false, department?: ActivityDepartment, role?: string) {
+
+    if (department === ActivityDepartment.INGENIERIA && role) {
+      this.assertEngineeringAccess(role)
+    }
 
     return this.prisma.activityType.findMany({
       where: {
         deletedAt: null,
         ...(includeInactive ? {} : { active: true }),
+        ...(department ? { department } : {}),
       },
       orderBy: { order: "asc" },
     })
@@ -148,15 +168,19 @@ export class ActivityLogService {
 
   // ---- Entradas de bitácora ----
 
-  async create(userId: string, dto: CreateActivityLogDto) {
+  async create(userId: string, dto: CreateActivityLogDto, role: string) {
 
     const type = await this.prisma.activityType.findUnique({
       where: { id: dto.activityTypeId },
-      select: { id: true, deletedAt: true },
+      select: { id: true, deletedAt: true, department: true },
     })
 
     if (!type || type.deletedAt) {
       throw new NotFoundException("Tipo de actividad no encontrado")
+    }
+
+    if (type.department === ActivityDepartment.INGENIERIA) {
+      this.assertEngineeringAccess(role)
     }
 
     // Si viene taskId, se valida que la tarea exista y (si también
@@ -231,6 +255,69 @@ export class ActivityLogService {
 
   }
 
+  // Auto-registro al completar un WorkflowStep (ver
+  // WorkflowService.complete()). A diferencia de create(): no pasa
+  // por franja horaria (shift queda null — no es un registro
+  // manual de turno), no sube foto, y queda linkeado 1:1 al step
+  // vía workflowStepId (constraint único en schema: como mucho un
+  // AUTO por step). Es "fire and forget" a propósito — si el tipo
+  // fijo no está sembrado o el insert falla, no debe tumbar el
+  // completado real de la tarea, así que el caller decide qué hacer
+  // con el error (ver comentario en WorkflowService.complete()).
+  async createFromTaskCompletion(params: {
+    userId: string
+    taskId: string
+    projectId: string
+    workflowStepId: string
+  }) {
+
+    const type = await this.prisma.activityType.findUnique({
+      where: { code: "TASK_COMPLETED" },
+      select: { id: true, deletedAt: true },
+    })
+
+    if (!type || type.deletedAt) {
+      // No debería pasar (viene del seed), pero si el tipo fijo no
+      // existe todavía en este ambiente, no tiene sentido reventar
+      // el completado de la tarea por esto.
+      return null
+    }
+
+    const now = new Date()
+
+    const log = await this.prisma.activityLog.create({
+      data: {
+        userId: params.userId,
+        activityTypeId: type.id,
+        projectId: params.projectId,
+        taskId: params.taskId,
+        workflowStepId: params.workflowStepId,
+        source: "AUTO",
+        shift: null,
+        loggedAt: now,
+      },
+      include: {
+        activityType: true,
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        task: {
+          select: { id: true, taskNumber: true, reference: true },
+        },
+      },
+    })
+
+    this.realtime.publish({
+      entity: "ACTIVITY_LOG",
+      action: "CREATED",
+      id: log.id,
+      payload: log,
+    })
+
+    return log
+
+  }
+
   // Elimina una entrada de bitácora. Igual que en comentarios: el
   // dueño de la entrada siempre puede borrar la suya, y quien tenga
   // ACTIVITY_LOG_READ_ANY... no alcanza para borrar entradas ajenas
@@ -268,7 +355,11 @@ export class ActivityLogService {
   // Entradas de HOY del usuario actual — lo que la pantalla de
   // Bitácora necesita para saber qué franjas ya tienen algo
   // logueado y cuáles todavía están pendientes.
-  async findMyToday(userId: string) {
+  async findMyToday(userId: string, department?: ActivityDepartment, role?: string) {
+
+    if (department === ActivityDepartment.INGENIERIA && role) {
+      this.assertEngineeringAccess(role)
+    }
 
     const startOfDay = getStartOfTodayInLima()
 
@@ -276,6 +367,9 @@ export class ActivityLogService {
       where: {
         userId,
         loggedAt: { gte: startOfDay },
+        ...(department
+          ? { activityType: { department } }
+          : {}),
       },
       include: {
         activityType: true,
@@ -295,7 +389,11 @@ export class ActivityLogService {
   // Filtro simple por ahora (usuario + rango de fechas); una pantalla
   // de reportes más completa puede construirse sobre este mismo
   // endpoint más adelante.
-  async findAll(filters: { userId?: string; projectId?: string; taskId?: string; from?: Date; to?: Date }) {
+  async findAll(filters: { userId?: string; projectId?: string; taskId?: string; from?: Date; to?: Date; department?: ActivityDepartment; role?: string }) {
+
+    if (filters.department === ActivityDepartment.INGENIERIA && filters.role) {
+      this.assertEngineeringAccess(filters.role)
+    }
 
     return this.prisma.activityLog.findMany({
       where: {
@@ -306,6 +404,9 @@ export class ActivityLogService {
           gte: filters.from,
           lte: filters.to,
         },
+        ...(filters.department
+          ? { activityType: { department: filters.department } }
+          : {}),
       },
       include: {
         activityType: true,

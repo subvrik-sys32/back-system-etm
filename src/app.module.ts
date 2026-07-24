@@ -63,6 +63,10 @@ import {
 } from "@/modules/colors/colors.module"
 
 import {
+  AreasModule,
+} from "@/modules/areas/areas.module"
+
+import {
   StagesModule,
 } from "./modules/stages/stages.module"
 
@@ -132,6 +136,7 @@ import {
     MaterialsModule,
     ThicknessesModule,
     ColorsModule,
+    AreasModule,
     StagesModule,
     StatusesModule,
     ProjectsModule,

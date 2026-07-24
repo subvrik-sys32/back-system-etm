@@ -3,6 +3,7 @@ import { WorkflowStatus } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { ActivityLogService } from "@/modules/activity-log/activity-log.service"
 
 import { WorkflowActionDto } from "./dto/workflow-action.dto"
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto"
@@ -46,6 +47,7 @@ export class WorkflowService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly operatorCache: OperatorCacheService,
+    private readonly activityLog: ActivityLogService,
   ) {}
 
   private publishDelta(
@@ -276,6 +278,26 @@ export class WorkflowService {
         paintKgReal: dto.paintKgReal ?? null,
       },
     )
+
+    // Auto-registro en la Bitácora de Producción — deliberadamente
+    // "fire and forget": si por lo que sea falla (tipo fijo no
+    // sembrado en este ambiente, etc.), no debe tumbar la respuesta
+    // de "tarea completada", que ya es la parte crítica y ya se
+    // persistió arriba. El operatorId ya se validó como asignado
+    // más arriba (validateOperatorAssigned), así que siempre hay a
+    // quién atribuirle el registro.
+    this.activityLog
+      .createFromTaskCompletion({
+        userId: step.operatorId as string,
+        taskId: step.taskId,
+        projectId: step.task.projectId,
+        workflowStepId: step.id,
+      })
+      .catch(() => {
+        // Error ya se pierde acá a propósito — ver comentario de
+        // arriba. Si en el futuro hace falta observabilidad de
+        // esto, es el lugar para loguearlo.
+      })
 
     return this.publishDelta(
       result,

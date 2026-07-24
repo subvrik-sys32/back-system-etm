@@ -5,5 +5,6 @@ import { ActivityLogService } from "./activity-log.service"
 @Module({
   controllers: [ActivityLogController],
   providers: [ActivityLogService],
+  exports: [ActivityLogService],
 })
 export class ActivityLogModule {}

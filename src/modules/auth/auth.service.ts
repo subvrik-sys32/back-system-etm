@@ -47,6 +47,7 @@ export class AuthService {
               },
             },
           },
+          area: true,
         },
       })
 
@@ -91,6 +92,7 @@ export class AuthService {
               },
             },
           },
+          area: true,
         },
       })
 
@@ -128,6 +130,12 @@ export class AuthService {
           permission: { code: string }
         }[]
       }
+      area: {
+        id: string
+        code: string
+        label: string
+        processCode: string | null
+      } | null
     },
   ): Promise<LoginResponseDto> {
 
@@ -169,6 +177,14 @@ export class AuthService {
           color: user.color,
           active: user.role.active,
         },
+        area: user.area
+          ? {
+              id: user.area.id,
+              code: user.area.code,
+              label: user.area.label,
+              processCode: user.area.processCode,
+            }
+          : null,
       },
     }
 
@@ -193,6 +209,7 @@ export class AuthService {
               },
             },
           },
+          area: true,
         },
         omit: {
           passwordHash: true,
@@ -233,6 +250,14 @@ export class AuthService {
           color: user.role.color,
           active: user.role.active,
         },
+        area: user.area
+          ? {
+              id: user.area.id,
+              code: user.area.code,
+              label: user.area.label,
+              processCode: user.area.processCode,
+            }
+          : null,
       },
     }
 

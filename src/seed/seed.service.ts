@@ -12,12 +12,13 @@ import {
 } from "./seed.constants"
 
 import { PRIORITIES } from "./priority.seed"
-import { ACTIVITY_TYPES } from "./activity-type.seed"
+import { ACTIVITY_TYPES, ENGINEERING_ACTIVITY_TYPES } from "./activity-type.seed"
 import { MATERIALS } from "./material.seed"
 import { THICKNESSES } from "./thickness.seed"
 import { COLORS } from "./color.seed"
 import { STAGES } from "./stage.seed"
 import { STATUSES } from "./status.seed"
+import { AREAS } from "./area.seed"
 
 @Injectable()
 export class SeedService {
@@ -40,6 +41,7 @@ export class SeedService {
     await this.seedColors()
     await this.seedStages()
     await this.seedStatuses()
+    await this.seedAreas()
 
     await this.seedAdmin()
 
@@ -300,6 +302,29 @@ export class SeedService {
       data: { deletedAt: new Date(), active: false },
     })
 
+    for (const type of ENGINEERING_ACTIVITY_TYPES) {
+
+      await this.prisma.activityType.upsert({
+
+        where: {
+          code: type.code,
+        },
+
+        create: type,
+
+        update: {
+          label: type.label,
+          icon: type.icon,
+          color: type.color,
+          order: type.order,
+          pinned: type.pinned ?? true,
+          department: type.department,
+        },
+
+      })
+
+    }
+
   }
 
   private async seedMaterials() {
@@ -414,6 +439,29 @@ export class SeedService {
           name: status.name,
           icon: status.icon,
           color: status.color,
+        },
+
+      })
+
+    }
+
+  }
+
+  private async seedAreas() {
+
+    for (const area of AREAS) {
+
+      await this.prisma.area.upsert({
+
+        where: {
+          code: area.code,
+        },
+
+        create: area,
+
+        update: {
+          label: area.label,
+          processCode: area.processCode,
         },
 
       })

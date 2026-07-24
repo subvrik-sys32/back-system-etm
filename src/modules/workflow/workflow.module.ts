@@ -14,7 +14,14 @@ import {
   OperatorCacheService,
 } from "./services/operator-cache.service"
 
+import {
+  ActivityLogModule,
+} from "@/modules/activity-log/activity-log.module"
+
 @Module({
+  imports: [
+    ActivityLogModule,
+  ],
   controllers: [
     WorkflowController,
   ],

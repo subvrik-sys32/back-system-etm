@@ -36,6 +36,13 @@ export class UpdateUserDto {
   @IsEnum(JobLevel)
   level?: JobLevel
 
+  // null explícito para poder limpiarlo (mismo criterio que level
+  // arriba) — @IsOptional() de class-validator ya deja pasar null
+  // sin validarlo como UUID.
+  @IsOptional()
+  @IsUUID()
+  areaId?: string | null
+
   @IsOptional()
   @IsString()
   icon?: string
