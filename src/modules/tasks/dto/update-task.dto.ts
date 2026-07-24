@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from "class-validator"
 
 import {
@@ -31,7 +32,11 @@ export class UpdateTaskDto {
   @Min(1)
   lotNumber?:number
 
+  // Solo exige mínimo 1 si Ensamble (EN) está en la ruta enviada en
+  // este mismo payload — @IsOptional() no alcanzaba acá porque el
+  // form manda 0 explícito (no undefined) cuando no hay Ensamble.
   @IsOptional()
+  @ValidateIf(o => o.route?.includes(ProcessCode.EN))
   @Min(1)
   assemblyCount?:number
 

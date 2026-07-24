@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from "class-validator"
 
 import {
@@ -29,6 +30,11 @@ export class CreateTaskDto {
   @Min(1)
   lotNumber?: number
 
+  // Solo exige mínimo 1 si Ensamble (EN) está en la ruta — antes
+  // era un @Min(1) incondicional, así que rechazaba cualquier tarea
+  // SIN Ensamble en su ruta (el frontend manda 0 en ese caso, que
+  // es lo correcto).
+  @ValidateIf(o => o.route?.includes(ProcessCode.EN))
   @Min(1)
   assemblyCount!: number
 
