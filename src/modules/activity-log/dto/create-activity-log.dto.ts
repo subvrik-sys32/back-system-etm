@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator"
+import { DayShift } from "@prisma/client"
 
 export class CreateActivityLogDto {
 
@@ -13,6 +14,14 @@ export class CreateActivityLogDto {
   @IsOptional()
   @IsString()
   taskId?: string
+
+  // Franja que la persona eligió a mano en el picker (tocó el "+"
+  // de esa franja puntual). Si no viene (ej. otro flujo que no
+  // pasa por el picker), el service cae a calcularla por la hora
+  // real — ver ActivityLogService.create().
+  @IsOptional()
+  @IsEnum(DayShift)
+  shift?: DayShift
 
   @IsOptional()
   @IsString()

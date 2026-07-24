@@ -216,6 +216,14 @@ export class ActivityLogService {
 
     const now = new Date()
 
+    // Si la persona eligió a mano una franja puntual en el picker
+    // (aunque ya haya pasado — se olvidó y lo registra tarde), se
+    // respeta esa franja tal cual. Antes esto SIEMPRE se
+    // recalculaba por la hora real, así que un registro tardío
+    // terminaba en la franja equivocada (la de "ahora", no la que
+    // la persona quiso registrar).
+    const shift = dto.shift ?? getShiftForDate(now)
+
     const photoUrl = dto.photoBase64
       ? await this.uploadActivityPhoto(dto.photoBase64)
       : null
@@ -228,7 +236,7 @@ export class ActivityLogService {
         taskId: dto.taskId,
         note: dto.note,
         photoUrl,
-        shift: getShiftForDate(now),
+        shift,
         loggedAt: now,
       },
       include: {
