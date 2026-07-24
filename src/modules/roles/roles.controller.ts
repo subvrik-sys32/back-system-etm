@@ -45,7 +45,6 @@ import {
   JwtAuthGuard,
   PermissionsGuard,
 )
-@Permissions(PermissionCode.ROLE_MANAGE)
 @Controller("roles")
 export class RolesController {
 
@@ -56,6 +55,13 @@ export class RolesController {
 
   ){}
 
+  // A diferencia del resto de este controller: esto es solo lectura
+  // (nombre/color/ícono de cada rol, sin detalle de permisos) y lo
+  // necesita cualquiera que pueda ver la página de Usuarios
+  // (RoleSelect al editar, panel de filtro por rol) — exigir
+  // ROLE_MANAGE acá rompía esa página entera para cualquiera que no
+  // fuera ADMIN, aunque nunca fueran a tocar nada de roles en sí.
+  @Permissions(PermissionCode.USER_READ)
   @Get()
 
   findAll(){
@@ -65,6 +71,7 @@ export class RolesController {
 
   }
 
+  @Permissions(PermissionCode.ROLE_MANAGE)
   @Post()
 
   create(
@@ -79,6 +86,7 @@ export class RolesController {
 
   }
 
+  @Permissions(PermissionCode.ROLE_MANAGE)
   @Patch(":id")
 
   update(
@@ -96,6 +104,7 @@ export class RolesController {
 
   }
 
+  @Permissions(PermissionCode.ROLE_MANAGE)
   @Delete(":id")
 
   remove(
@@ -110,6 +119,11 @@ export class RolesController {
 
   }
 
+  // El detalle de permisos de un rol sí es sensible (expone qué
+  // puede hacer cada rol en detalle) — se queda en ROLE_MANAGE,
+  // solo lo usa la pantalla "Roles y Permisos" (ya gateada igual en
+  // el nav).
+  @Permissions(PermissionCode.ROLE_MANAGE)
   @Get(":id/permissions")
 
   findPermissions(
@@ -124,6 +138,7 @@ export class RolesController {
 
   }
 
+  @Permissions(PermissionCode.ROLE_MANAGE)
   @Patch(":id/permissions")
 
   updatePermissions(
