@@ -4,6 +4,7 @@ import { WorkflowStatus } from "@prisma/client"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { ActivityLogService } from "@/modules/activity-log/activity-log.service"
+import { NotificationsService } from "@/modules/notifications/notifications.service"
 
 import { WorkflowActionDto } from "./dto/workflow-action.dto"
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto"
@@ -48,6 +49,7 @@ export class WorkflowService {
     private readonly realtime: RealtimeService,
     private readonly operatorCache: OperatorCacheService,
     private readonly activityLog: ActivityLogService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private publishDelta(
@@ -421,6 +423,156 @@ export class WorkflowService {
       result,
       userId,
     )
+
+  }
+
+  // "Convocar" desde TaskAreaPanel — a propósito NO pasa por
+  // transitionStatus/validators: no es una transición de estado del
+  // workflow (QUEUE→PENDING→...), es metadata de asignación que
+  // puede pasar en cualquier status. mode "ASSIGN" pone operatorId
+  // ya mismo (mismo campo que ya usa ProcessOperatorCell al iniciar,
+  // solo que acá con assignedById puesto para distinguir "me lo
+  // asignaron" de "lo tomé yo"); mode "INVITE" NO toca operatorId,
+  // solo deja la invitación pendiente hasta que el operario la
+  // acepte desde su Mis tareas.
+  async summon(
+    stepIds: string[],
+    operatorId: string,
+    mode: "ASSIGN" | "INVITE",
+    actorId: string,
+  ) {
+
+    const steps = await this.prisma.workflowStep.findMany({
+      where: { id: { in: stepIds } },
+      select: { id: true, taskId: true },
+    })
+
+    if (steps.length === 0) {
+      throw new BadRequestException("No se encontraron los pasos indicados")
+    }
+
+    if (mode === "ASSIGN") {
+
+      await this.prisma.workflowStep.updateMany({
+        where: { id: { in: stepIds } },
+        data: {
+          operatorId,
+          assignedById: actorId,
+          invitedOperatorId: null,
+          invitedById: null,
+          invitedAt: null,
+        },
+      })
+
+    } else {
+
+      await this.prisma.workflowStep.updateMany({
+        where: { id: { in: stepIds } },
+        data: {
+          invitedOperatorId: operatorId,
+          invitedById: actorId,
+          invitedAt: new Date(),
+        },
+      })
+
+    }
+
+    for (const step of steps) {
+
+      // Una notificación por tarea convocada — igual que
+      // notifyComment, el fallo de esto no debería tumbar la
+      // asignación real (que ya se persistió arriba).
+      await this.notifications.notifyTaskAssignment({
+        operatorId,
+        actorId,
+        taskId: step.taskId,
+        workflowStepId: step.id,
+        type: mode === "ASSIGN" ? "TASK_ASSIGNED" : "TASK_SUMMONED",
+        messageSnippet:
+          mode === "ASSIGN"
+            ? "Te asignaron una tarea"
+            : "Te convocaron a una tarea — revisa Mis tareas",
+      }).catch(() => {
+        // no crítico, ver comentario arriba
+      })
+
+      this.realtime.publish({
+        entity: "WORKFLOW",
+        action: "UPDATED",
+        id: step.taskId,
+        payload: { taskId: step.taskId },
+        excludeUserId: actorId,
+      })
+
+    }
+
+    return { success: true, count: steps.length }
+
+  }
+
+  async acceptInvite(stepId: string, userId: string) {
+
+    const step = await this.prisma.workflowStep.findUnique({
+      where: { id: stepId },
+      select: { id: true, taskId: true, invitedOperatorId: true, invitedById: true },
+    })
+
+    if (!step || step.invitedOperatorId !== userId) {
+      throw new BadRequestException("No tenés una invitación pendiente para este paso")
+    }
+
+    await this.prisma.workflowStep.update({
+      where: { id: stepId },
+      data: {
+        operatorId: userId,
+        assignedById: step.invitedById,
+        invitedOperatorId: null,
+        invitedById: null,
+        invitedAt: null,
+      },
+    })
+
+    this.realtime.publish({
+      entity: "WORKFLOW",
+      action: "UPDATED",
+      id: step.taskId,
+      payload: { taskId: step.taskId },
+      excludeUserId: userId,
+    })
+
+    return { success: true }
+
+  }
+
+  async declineInvite(stepId: string, userId: string) {
+
+    const step = await this.prisma.workflowStep.findUnique({
+      where: { id: stepId },
+      select: { id: true, taskId: true, invitedOperatorId: true },
+    })
+
+    if (!step || step.invitedOperatorId !== userId) {
+      throw new BadRequestException("No tenés una invitación pendiente para este paso")
+    }
+
+    await this.prisma.workflowStep.update({
+      where: { id: stepId },
+      data: {
+        invitedOperatorId: null,
+        invitedById: null,
+        invitedAt: null,
+      },
+    })
+
+    this.realtime.publish({
+      entity: "WORKFLOW",
+      action: "UPDATED",
+      id: step.taskId,
+      payload: { taskId: step.taskId },
+      excludeUserId: userId,
+    })
+
+    return { success: true }
 
   }
 

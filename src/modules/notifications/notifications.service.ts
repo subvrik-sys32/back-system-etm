@@ -156,7 +156,14 @@ export class NotificationsService{
 
     await this.notificationRepository.markAllAsRead(userId)
 
+    // El where ya excluye commentId null (ver repository), pero
+    // Prisma no achica el TIPO en base al where — sigue viniendo
+    // como string|null acá, así que se filtra también en runtime
+    // para poder pasarlo a getCommentReadStatus (pide string).
     for(const { commentId } of unreadComments){
+
+      if(!commentId)continue
+
       const status=await this.getCommentReadStatus(commentId)
       this.realtime.publish({
         entity:"COMMENT_READ_STATUS",
@@ -297,12 +304,59 @@ export class NotificationsService{
 
   }
 
+  // "Convocar" desde TaskAreaPanel — a diferencia de notifyComment,
+  // esto no nace de un comentario (commentId null) y siempre tiene
+  // un destinatario puntual (nunca "todos los usuarios activos").
+  async notifyTaskAssignment(params:{
+    operatorId:string
+    actorId:string
+    taskId:string
+    workflowStepId:string
+    type:"TASK_ASSIGNED"|"TASK_SUMMONED"
+    messageSnippet:string
+  }){
+
+    await this.notificationRepository.createMany([{
+      userId:params.operatorId,
+      actorId:params.actorId,
+      type:params.type,
+      taskId:params.taskId,
+      projectId:null,
+      workflowStepId:params.workflowStepId,
+      commentId:null,
+      messageSnippet:params.messageSnippet,
+    }])
+
+    // Mismo motivo que en notifyComment: volvemos a preguntarle a la
+    // DB qué quedó creado para que el payload de realtime tenga la
+    // forma exacta que el front espera (createdAt, isRead, etc.),
+    // en vez de armarlo a mano acá.
+    const [created]=await this.notificationRepository.findManyByWorkflowStepAndUser(
+      params.workflowStepId,
+      params.operatorId,
+    )
+
+    if(created){
+      this.realtime.publishToUser(created.userId,{
+        entity:"NOTIFICATION",
+        action:"CREATED",
+        id:created.id,
+        payload:this.enrichNotification(created),
+      })
+    }
+
+  }
+
   async markTargetAsRead(
     userId:string,
     target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string } | { scope:"project"; projectId:string },
   ){
 
-    let unread:{ id:string; commentId:string }[]
+    // El tipo declarado sigue con commentId:string|null (los where
+    // de las 3 queries de abajo ya excluyen null, pero Prisma no
+    // angosta el TIPO generado en base al where) — se filtra en
+    // runtime más abajo antes de usarlo donde se pide string puro.
+    let unread:{ id:string; commentId:string|null }[]
 
     if(target.scope==="task"){
       unread=await this.notificationRepository.findUnreadByTaskId(userId,target.taskId)
@@ -319,8 +373,11 @@ export class NotificationsService{
 
     // Un mismo "abrir historial" puede marcar leídas notificaciones de
     // varios comentarios distintos: recalculamos y publicamos el doble
-    // check de cada uno.
-    const uniqueCommentIds=Array.from(new Set(unread.map(n=>n.commentId)))
+    // check de cada uno. .filter(Boolean) sale el null (ya no debería
+    // haber ninguno por el where, esto es solo para el tipo).
+    const uniqueCommentIds=Array.from(
+      new Set(unread.map(n=>n.commentId)),
+    ).filter((commentId):commentId is string=>commentId!==null)
 
     for(const commentId of uniqueCommentIds){
       const status=await this.getCommentReadStatus(commentId)

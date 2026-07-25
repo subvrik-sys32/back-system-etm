@@ -72,3 +72,17 @@ export function getStartOfTodayInLima(date: Date = new Date()): Date {
   return new Date(`${year}-${month}-${day}T05:00:00.000Z`)
 
 }
+
+/**
+ * Medianoche (00:00) del día SIGUIENTE en hora Lima — el límite
+ * superior para acotar una consulta a un solo día específico (no
+ * "desde tal fecha en adelante"). Lima no tiene horario de verano,
+ * así que sumar 24h exactas es seguro.
+ */
+export function getEndOfDayInLima(date: Date = new Date()): Date {
+
+  const startOfDay = getStartOfTodayInLima(date)
+
+  return new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
+
+}

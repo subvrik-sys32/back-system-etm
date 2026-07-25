@@ -105,6 +105,9 @@ model User {
   role                  Role           @relation(fields: [roleId], references: [id])
   area                  Area?          @relation(fields: [areaId], references: [id])
   workflowSteps         WorkflowStep[]
+  workflowStepsAssigned WorkflowStep[] @relation("WorkflowStepAssignedBy")
+  workflowStepsInvited  WorkflowStep[] @relation("WorkflowStepInvitedOperator")
+  workflowStepsInvitedBy WorkflowStep[] @relation("WorkflowStepInvitedBy")
   comments              Comment[]
   notificationsReceived Notification[] @relation("NotificationRecipient")
   notificationsSent     Notification[] @relation("NotificationActor")
@@ -141,7 +144,12 @@ model Notification {
   taskId         String?
   projectId      String?
   workflowStepId String?
-  commentId      String
+  // Opcional: antes TODA notificación estaba atada a un comentario
+  // (@relation obligatoria). Las de convocatoria/asignación
+  // (TASK_ASSIGNED, TASK_SUMMONED) no nacen de un comentario, así
+  // que este campo pasa a nullable — el resto de las notificaciones
+  // existentes (MENTION, COMMENT) lo siguen llenando igual que antes.
+  commentId      String?
   messageSnippet String
   read           Boolean          @default(false)
   createdAt      DateTime         @default(now())
@@ -150,7 +158,7 @@ model Notification {
   task           Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project        Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workflowStep   WorkflowStep?    @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
-  comment        Comment          @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  comment        Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
   @@index([commentId])
@@ -162,6 +170,13 @@ model Notification {
 enum NotificationType {
   MENTION
   COMMENT
+  // Asignación directa desde "Convocar" en TaskAreaPanel (modo
+  // ASSIGN): el operatorId ya quedó puesto, no hace falta aceptar.
+  TASK_ASSIGNED
+  // Invitación desde "Convocar" (modo INVITE): el operatorId todavía
+  // NO se tocó — el operario tiene que aceptar desde su "Mis tareas"
+  // para que recién ahí se le asigne de verdad.
+  TASK_SUMMONED
 }
 
 model Priority {
@@ -324,6 +339,22 @@ model WorkflowStep {
   reviewedAt    DateTime?
   operatorId    String?
   operator      User?          @relation(fields: [operatorId], references: [id])
+  // Quién puso a `operator` ahí mediante "Convocar" (modo ASSIGN) —
+  // null cuando el propio operario se autoasignó (flujo normal de
+  // ProcessOperatorCell al iniciar). Es lo que separa "Asignadas" de
+  // "Disponibles" en Mis tareas — no es lo mismo que operatorId, que
+  // solo dice QUIÉN está puesto, no CÓMO llegó ahí.
+  assignedById  String?
+  assignedBy    User?          @relation("WorkflowStepAssignedBy", fields: [assignedById], references: [id])
+  // "Convocar" modo INVITE: invitación pendiente, operatorId NO se
+  // toca todavía. Se resuelve (acepta/rechaza) desde el propio "Mis
+  // tareas" del operario invitado — recién al aceptar, invitedOperatorId
+  // pasa a operatorId y assignedById se llena con invitedById.
+  invitedOperatorId String?
+  invitedOperator   User?      @relation("WorkflowStepInvitedOperator", fields: [invitedOperatorId], references: [id])
+  invitedById       String?
+  invitedBy         User?      @relation("WorkflowStepInvitedBy", fields: [invitedById], references: [id])
+  invitedAt         DateTime?
   task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   comments      Comment[]
   notifications Notification[]
@@ -335,6 +366,7 @@ model WorkflowStep {
 
   @@unique([taskId, processCode])
   @@index([taskId])
+  @@index([invitedOperatorId])
 }
 
 enum EngineeringFileStatus {

@@ -11,7 +11,7 @@ import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { UpdateActivityLogDto } from "./dto/update-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
 import { UpdateActivityTypeDto } from "./dto/update-activity-type.dto"
-import { getLimaMinutesOfDay, getStartOfTodayInLima } from "./utils/lima-time.util"
+import { getLimaMinutesOfDay, getStartOfTodayInLima, getEndOfDayInLima } from "./utils/lima-time.util"
 
 // Se calcula del lado del servidor a partir de la hora real — nunca
 // se confía en que el cliente diga "estoy en tal franja", evita que
@@ -486,18 +486,37 @@ export class ActivityLogService {
   // Entradas de HOY del usuario actual — lo que la pantalla de
   // Bitácora necesita para saber qué franjas ya tienen algo
   // logueado y cuáles todavía están pendientes.
-  async findMyToday(userId: string, department?: ActivityDepartment, role?: string) {
+  // "me/today" es el nombre histórico del endpoint — sigue
+  // devolviendo HOY si no se manda `date`, pero ahora también sirve
+  // para navegar a un día puntual (ver DateNavigator en el
+  // frontend, mismo mecanismo que la Bitácora del Equipo). Se
+  // acota con un límite superior (getEndOfDayInLima) solo cuando
+  // hay `date` explícito — sin eso, "hoy" se sigue comportando
+  // igual que antes (sin tope, ya que no puede haber logs futuros).
+  async findMyToday(userId: string, department?: ActivityDepartment, role?: string, date?: string) {
 
     if (department === ActivityDepartment.INGENIERIA && role) {
       this.assertEngineeringAccess(role)
     }
 
-    const startOfDay = getStartOfTodayInLima()
+    // Mediodía UTC del día pedido: evita que el parseo de la fecha
+    // se corra un día para atrás/adelante por un redondeo de TZ,
+    // sin importar en qué huso corra el servidor — getStartOfTodayInLima
+    // solo necesita un instante que caiga dentro del día correcto en
+    // Lima, no le importa la hora exacta.
+    const referenceDate = date
+      ? new Date(`${date}T12:00:00.000Z`)
+      : new Date()
+
+    const startOfDay = getStartOfTodayInLima(referenceDate)
 
     return this.prisma.activityLog.findMany({
       where: {
         userId,
-        loggedAt: { gte: startOfDay },
+        loggedAt: {
+          gte: startOfDay,
+          ...(date ? { lt: getEndOfDayInLima(referenceDate) } : {}),
+        },
         ...(department
           ? { activityType: { department } }
           : {}),

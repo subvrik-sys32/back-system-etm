@@ -94,8 +94,9 @@ export class ActivityLogController {
   findMyToday(
     @CurrentUser() user: CurrentUserType,
     @Query("department") department?: ActivityDepartment,
+    @Query("date") date?: string,
   ) {
-    return this.activityLogService.findMyToday(user.id, department, user.role)
+    return this.activityLogService.findMyToday(user.id, department, user.role, date)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_CREATE)

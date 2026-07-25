@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   UseGuards,
 } from "@nestjs/common"
 
@@ -18,6 +19,10 @@ import {
 import {
   UpdateWorkflowStepDto,
 } from "./dto/update-workflow-step.dto"
+
+import {
+  SummonWorkflowStepsDto,
+} from "./dto/summon-workflow-steps.dto"
 
 import {
   WORKFLOW_BUSINESS,
@@ -254,6 +259,79 @@ export class WorkflowController{
 
       user.id,
 
+    )
+
+  }
+
+  // "Convocar" desde TaskAreaPanel — mismo permiso que el resto de
+  // WORKFLOW_UPDATE (es el que ya tienen supervisores/admins para
+  // tocar operatorId vía ProcessOperatorCell).
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Post("summon")
+  summon(
+
+    @Body()
+    dto:SummonWorkflowStepsDto,
+
+    @CurrentUser()
+    user:CurrentUserType,
+
+  ){
+
+    return this.workflowService.summon(
+
+      dto.stepIds,
+      dto.operatorId,
+      dto.mode,
+      user.id,
+
+    )
+
+  }
+
+  // El operario invitado acepta/rechaza su propia invitación —
+  // mismo permiso base, el ownership real (¿es a MÍ que me
+  // invitaron?) se valida adentro del service, no acá.
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Patch(":id/accept-invite")
+  acceptInvite(
+
+    @Param("id")
+    id:string,
+
+    @CurrentUser()
+    user:CurrentUserType,
+
+  ){
+
+    return this.workflowService.acceptInvite(
+      id,
+      user.id,
+    )
+
+  }
+
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Patch(":id/decline-invite")
+  declineInvite(
+
+    @Param("id")
+    id:string,
+
+    @CurrentUser()
+    user:CurrentUserType,
+
+  ){
+
+    return this.workflowService.declineInvite(
+      id,
+      user.id,
     )
 
   }

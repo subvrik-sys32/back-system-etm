@@ -18,9 +18,14 @@ import {
   ActivityLogModule,
 } from "@/modules/activity-log/activity-log.module"
 
+import {
+  NotificationsModule,
+} from "@/modules/notifications/notifications.module"
+
 @Module({
   imports: [
     ActivityLogModule,
+    NotificationsModule,
   ],
   controllers: [
     WorkflowController,

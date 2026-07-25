@@ -18,23 +18,30 @@ export class NotificationRepository{
     })
   }
 
+  // commentId:{ not:null } en las 3 de abajo: antes cualquier
+  // notificación no leída de esta tarea/step/proyecto entraba acá,
+  // pero TASK_ASSIGNED/TASK_SUMMONED (las de "Convocar") no tienen
+  // comentario detrás — no deberían mezclarse con el recálculo del
+  // doble check de comentarios, y de paso esto es lo que mantiene
+  // commentId tipado como string (no string|null) para quien
+  // consume el resultado.
   findUnreadByTaskId(userId:string, taskId:string){
     return this.prisma.notification.findMany({
-      where:{ userId, read:false, taskId, workflowStepId:null },
+      where:{ userId, read:false, taskId, workflowStepId:null, commentId:{ not:null } },
       select:{ id:true, commentId:true },
     })
   }
 
   findUnreadByWorkflowStepId(userId:string, workflowStepId:string){
     return this.prisma.notification.findMany({
-      where:{ userId, read:false, workflowStepId },
+      where:{ userId, read:false, workflowStepId, commentId:{ not:null } },
       select:{ id:true, commentId:true },
     })
   }
 
   findUnreadByProjectId(userId:string, projectId:string){
     return this.prisma.notification.findMany({
-      where:{ userId, read:false, projectId },
+      where:{ userId, read:false, projectId, commentId:{ not:null } },
       select:{ id:true, commentId:true },
     })
   }
@@ -76,9 +83,12 @@ export class NotificationRepository{
   createMany(data:({
     userId:string
     actorId:string
-    type:"MENTION"|"COMMENT"
+    type:"MENTION"|"COMMENT"|"TASK_ASSIGNED"|"TASK_SUMMONED"
     workflowStepId:string|null
-    commentId:string
+    // Opcional: MENTION/COMMENT siempre traen un comentario real
+    // detrás, TASK_ASSIGNED/TASK_SUMMONED nacen de "Convocar" y no
+    // tienen ningún comentario asociado.
+    commentId:string|null
     messageSnippet:string
   } & (
     | { taskId:string; projectId:null }
@@ -91,6 +101,18 @@ export class NotificationRepository{
     return this.prisma.notification.findMany({
       where:{ commentId },
       include:notificationInclude,
+    })
+  }
+
+  // Mismo motivo que findManyByComment, pero para notificaciones que
+  // no tienen comentario detrás (TASK_ASSIGNED/TASK_SUMMONED) — se
+  // identifican por step + destinatario en vez de por commentId.
+  findManyByWorkflowStepAndUser(workflowStepId:string,userId:string){
+    return this.prisma.notification.findMany({
+      where:{ workflowStepId, userId },
+      include:notificationInclude,
+      orderBy:{ createdAt:"desc" },
+      take:1,
     })
   }
 
@@ -162,7 +184,7 @@ export class NotificationRepository{
 
   findUnreadCommentIdsForUser(userId:string){
     return this.prisma.notification.findMany({
-      where:{ userId, read:false },
+      where:{ userId, read:false, commentId:{ not:null } },
       select:{ commentId:true },
       distinct:["commentId"],
     })
