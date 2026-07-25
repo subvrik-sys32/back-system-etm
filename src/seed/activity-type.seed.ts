@@ -85,61 +85,112 @@ export const ACTIVITY_TYPES = [
     pinned: false,
   },
 
+  // Mismo criterio que TASK_COMPLETED pero para el auto-registro al
+  // iniciar un WorkflowStep (ver ActivityLogService.createFromTaskStart).
+  {
+    code: "TASK_STARTED",
+    label: "Tarea iniciada",
+    icon: "play",
+    color: "#0EA5E9",
+    order: 98,
+    pinned: false,
+  },
+
 ]
 
 // Bitácora de Ingeniería — mismo motor, 100% manual, sin
 // auto-registro (a diferencia de Producción, acá no hay un
 // WorkflowStep que "completar"). department se pasa explícito
 // porque el default del modelo es PRODUCCION.
+//
+// Lista independiente del Stage (código separado, no confundir):
+// esto es "qué está haciendo la persona ahora mismo" para la
+// Bitácora, no la etapa del proyecto. Los code no colisionan con
+// los de ACTIVITY_TYPES de arriba porque comparten la misma tabla
+// (code es único a nivel global, no por department).
 export const ENGINEERING_ACTIVITY_TYPES = [
 
   {
-    code: "DISENO",
-    label: "Diseño",
-    icon: "drafting",
-    color: "#6366F1",
+    code: "DISENO_MECANICO",
+    label: "Diseño Mecánico",
+    icon: "pencil",
+    color: "#2563EB",
     order: 0,
     pinned: true,
     department: "INGENIERIA" as const,
   },
 
   {
-    code: "DETALLADO",
-    label: "Detallado",
-    icon: "clipboard",
-    color: "#0EA5E9",
+    code: "DISENO_ELECTRICO",
+    label: "Diseño Eléctrico",
+    icon: "bolt",
+    color: "#EAB308",
     order: 1,
     pinned: true,
     department: "INGENIERIA" as const,
   },
 
   {
-    code: "REVISION_PLANOS",
-    label: "Revisión de planos",
-    icon: "quality",
-    color: "#22C55E",
+    code: "PLANO_MECANICO",
+    label: "Plano Mecánico",
+    icon: "drafting",
+    color: "#3B82F6",
     order: 2,
     pinned: true,
     department: "INGENIERIA" as const,
   },
 
   {
-    code: "REUNION_TECNICA",
-    label: "Reunión técnica",
-    icon: "users",
-    color: "#8B5CF6",
+    code: "PLANO_ELECTRICO",
+    label: "Plano Eléctrico",
+    icon: "drafting",
+    color: "#FACC15",
     order: 3,
-    pinned: false,
+    pinned: true,
+    department: "INGENIERIA" as const,
+  },
+
+  // Antes iban a ser dos ("LM y Geos" + "CAM: Nest y DXF") —
+  // fusionadas en una sola a pedido.
+  {
+    code: "CAM",
+    label: "CAM",
+    icon: "cog",
+    color: "#0EA5E9",
+    order: 4,
+    pinned: true,
+    department: "INGENIERIA" as const,
+  },
+
+  // Antes iban a ser dos ("Planos de Doblez" + "Planos de
+  // Soldadura") — fusionadas en una sola a pedido.
+  {
+    code: "PLANOS_FABRICACION",
+    label: "Planos de Fabricación",
+    icon: "scissors",
+    color: "#F97316",
+    order: 5,
+    pinned: true,
     department: "INGENIERIA" as const,
   },
 
   {
-    code: "SOPORTE_PRODUCCION",
-    label: "Soporte a Producción",
-    icon: "tool",
-    color: "#F59E0B",
-    order: 4,
-    pinned: false,
+    code: "LISTA_PROCURA",
+    label: "Lista de Procura",
+    icon: "boxes",
+    color: "#10B981",
+    order: 6,
+    pinned: true,
+    department: "INGENIERIA" as const,
+  },
+
+  {
+    code: "PRODUCCION",
+    label: "Entrega a Producción",
+    icon: "factory",
+    color: "#22C55E",
+    order: 7,
+    pinned: true,
     department: "INGENIERIA" as const,
   },
 

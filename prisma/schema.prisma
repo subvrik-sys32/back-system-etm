@@ -327,7 +327,11 @@ model WorkflowStep {
   task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
   comments      Comment[]
   notifications Notification[]
-  activityLog   ActivityLog?
+  // Lista, no singular: antes ActivityLog.workflowStepId era
+  // @unique a secas (un solo log por step), ahora es único por
+  // (step, tipo) — así que un step puede tener hasta dos logs AUTO
+  // acá (TASK_STARTED + TASK_COMPLETED).
+  activityLogs  ActivityLog[]
 
   @@unique([taskId, processCode])
   @@index([taskId])
@@ -438,10 +442,13 @@ model ActivityLog {
   projectId      String?
   taskId         String?
   // Solo se llena cuando source=AUTO — el WorkflowStep que disparó
-  // este registro. Constraint único: como mucho un log AUTO por
-  // step (evita duplicados si WorkflowService.complete() se llegara
-  // a invocar dos veces sobre el mismo step).
-  workflowStepId String?           @unique
+  // este registro. Antes era @unique a secas (un solo log AUTO por
+  // step); ahora que también se auto-registra el inicio (ver
+  // ActivityLogService.createFromTaskStart), pasa a ser único por
+  // (step, tipo) vía @@unique más abajo — como mucho un
+  // TASK_STARTED y un TASK_COMPLETED por step, evitando duplicados
+  // si el endpoint se llegara a invocar dos veces sobre el mismo.
+  workflowStepId String?
   note           String?
   photoUrl       String?
   // Nullable: los registros AUTO no pertenecen a ninguna franja
@@ -460,4 +467,5 @@ model ActivityLog {
   @@index([projectId])
   @@index([taskId])
   @@index([source])
+  @@unique([workflowStepId, activityTypeId])
 }

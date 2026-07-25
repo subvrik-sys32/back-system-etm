@@ -86,6 +86,21 @@ export class WorkflowService {
       operatorId: string | null
       startedAt: Date | null
     }) => Record<string, unknown>,
+    // Opcional: pause/resume no lo pasan y siguen exactamente
+    // igual que antes. Se dispara después de publishDelta (la
+    // transición ya quedó persistida y publicada), pensado para
+    // efectos secundarios tipo auto-registro en la Bitácora (ver
+    // start() más abajo) que no deben bloquear ni poder tumbar la
+    // respuesta si fallan.
+    onSuccess?: (step: {
+      id: string
+      taskId: string
+      status: WorkflowStatus
+      operatorId: string | null
+      startedAt: Date | null
+      processCode: string
+      task: { projectId: string }
+    }) => void,
   ) {
 
     const step = await getStepForStart(
@@ -104,10 +119,14 @@ export class WorkflowService {
       payload,
     )
 
-    return this.publishDelta(
+    const published = this.publishDelta(
       result,
       userId,
     )
+
+    onSuccess?.(step)
+
+    return published
 
   }
 
@@ -204,6 +223,30 @@ export class WorkflowService {
           status: WorkflowStatus.PROGRESS,
           startedAt: step.startedAt ?? new Date(),
         }
+
+      },
+
+      // Auto-registro en la Bitácora de Producción al iniciar —
+      // mismo patrón "fire and forget" que complete(): si falla
+      // (tipo fijo no sembrado en este ambiente, etc.), no debe
+      // tumbar la respuesta de "proceso iniciado", que ya es la
+      // parte crítica y ya se persistió arriba. El operatorId ya
+      // se validó como asignado más arriba
+      // (validateOperatorAssigned), así que siempre hay a quién
+      // atribuirle el registro.
+      step => {
+
+        this.activityLog
+          .createFromTaskStart({
+            userId: step.operatorId as string,
+            taskId: step.taskId,
+            projectId: step.task.projectId,
+            workflowStepId: step.id,
+          })
+          .catch(() => {
+            // Error ya se pierde acá a propósito — ver comentario
+            // de arriba.
+          })
 
       },
 

@@ -266,12 +266,13 @@ export class ActivityLogService {
   // Auto-registro al completar un WorkflowStep (ver
   // WorkflowService.complete()). A diferencia de create(): no pasa
   // por franja horaria (shift queda null — no es un registro
-  // manual de turno), no sube foto, y queda linkeado 1:1 al step
-  // vía workflowStepId (constraint único en schema: como mucho un
-  // AUTO por step). Es "fire and forget" a propósito — si el tipo
-  // fijo no está sembrado o el insert falla, no debe tumbar el
-  // completado real de la tarea, así que el caller decide qué hacer
-  // con el error (ver comentario en WorkflowService.complete()).
+  // manual de turno), no sube foto, y queda linkeado al step vía
+  // workflowStepId (constraint único en schema por (step, tipo):
+  // como mucho un AUTO de este tipo por step). Es "fire and forget"
+  // a propósito — si el tipo fijo no está sembrado o el insert
+  // falla, no debe tumbar el completado real de la tarea, así que
+  // el caller decide qué hacer con el error (ver comentario en
+  // WorkflowService.complete()).
   async createFromTaskCompletion(params: {
     userId: string
     taskId: string
@@ -288,6 +289,68 @@ export class ActivityLogService {
       // No debería pasar (viene del seed), pero si el tipo fijo no
       // existe todavía en este ambiente, no tiene sentido reventar
       // el completado de la tarea por esto.
+      return null
+    }
+
+    const now = new Date()
+
+    const log = await this.prisma.activityLog.create({
+      data: {
+        userId: params.userId,
+        activityTypeId: type.id,
+        projectId: params.projectId,
+        taskId: params.taskId,
+        workflowStepId: params.workflowStepId,
+        source: "AUTO",
+        shift: null,
+        loggedAt: now,
+      },
+      include: {
+        activityType: true,
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        task: {
+          select: { id: true, taskNumber: true, reference: true },
+        },
+      },
+    })
+
+    this.realtime.publish({
+      entity: "ACTIVITY_LOG",
+      action: "CREATED",
+      id: log.id,
+      payload: log,
+    })
+
+    return log
+
+  }
+
+  // Auto-registro al iniciar un WorkflowStep (ver
+  // WorkflowService.start()). Mismo patrón que
+  // createFromTaskCompletion: linkeado al step vía workflowStepId
+  // (constraint único por (step, tipo), ver @@unique en el schema),
+  // source=AUTO, sin franja ni foto, y "fire and forget" — si el
+  // tipo fijo no está sembrado o el insert falla, no debe tumbar el
+  // inicio real del proceso, así que el caller decide qué hacer con
+  // el error (ver comentario en WorkflowService.start()).
+  async createFromTaskStart(params: {
+    userId: string
+    taskId: string
+    projectId: string
+    workflowStepId: string
+  }) {
+
+    const type = await this.prisma.activityType.findUnique({
+      where: { code: "TASK_STARTED" },
+      select: { id: true, deletedAt: true },
+    })
+
+    if (!type || type.deletedAt) {
+      // No debería pasar (viene del seed), pero si el tipo fijo no
+      // existe todavía en este ambiente, no tiene sentido reventar
+      // el inicio de la tarea por esto.
       return null
     }
 

@@ -50,6 +50,12 @@ export async function getStepForStart(
       status:true,
       operatorId:true,
       startedAt:true,
+      processCode:true,
+      task:{
+        select:{
+          projectId:true,
+        },
+      },
     },
   })
 
