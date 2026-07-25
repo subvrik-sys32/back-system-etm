@@ -428,6 +428,13 @@ export class UsersService {
         role: {
           select: { code: true },
         },
+        // Faltaba por completo — sin esto, useAreaOperators
+        // (Convocar en TaskAreaPanel) nunca podía filtrar por área
+        // porque user.area?.processCode siempre venía undefined
+        // para TODOS, en TODAS las áreas.
+        area: {
+          select: { id: true, code: true, label: true, processCode: true },
+        },
       },
       orderBy: { name: "asc" },
     })
