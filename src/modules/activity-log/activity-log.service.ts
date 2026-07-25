@@ -8,6 +8,7 @@ import { PermissionCode } from "@/core/enums/permission-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
+import { UpdateActivityLogDto } from "./dto/update-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
 import { UpdateActivityTypeDto } from "./dto/update-activity-type.dto"
 import { getLimaMinutesOfDay, getStartOfTodayInLima } from "./utils/lima-time.util"
@@ -381,6 +382,65 @@ export class ActivityLogService {
     this.realtime.publish({
       entity: "ACTIVITY_LOG",
       action: "CREATED",
+      id: log.id,
+      payload: log,
+    })
+
+    return log
+
+  }
+
+  // Mueve una entrada a otra franja — el caso de "la registré en el
+  // slot equivocado, la arrastro a la correcta" (ver
+  // UpdateActivityLogDto). Mismo criterio de ownership que remove():
+  // el dueño puede mover la suya, ACTIVITY_LOG_READ_ANY no alcanza
+  // para mover entradas ajenas. Se reusa el permiso ACTIVITY_LOG_CREATE
+  // (mover tu propio registro a otro slot es, en efecto, la misma
+  // acción que crearlo ahí) en vez de sembrar un permiso nuevo solo
+  // para esto — si más adelante esto crece a un editor completo
+  // (activityType/project/note), ahí sí conviene separarlo.
+  async update(id: string, dto: UpdateActivityLogDto, user: CurrentUserType) {
+
+    const existing = await this.prisma.activityLog.findUnique({
+      where: { id },
+      select: { id: true, userId: true, source: true },
+    })
+
+    if (!existing) {
+      throw new NotFoundException("Entrada de bitácora no encontrada")
+    }
+
+    if (existing.userId !== user.id) {
+      throw new ForbiddenException("No podés mover una entrada de bitácora ajena.")
+    }
+
+    // Los AUTO (TASK_STARTED/TASK_COMPLETED) no pertenecen a
+    // ninguna franja manual — no tiene sentido "arrastrarlos", y
+    // permitirlo rompería el @@unique([workflowStepId, activityTypeId])
+    // si alguna vez se los toca por otro lado.
+    if (existing.source === "AUTO") {
+      throw new ForbiddenException(
+        "Las entradas automáticas no se pueden mover de franja.",
+      )
+    }
+
+    const log = await this.prisma.activityLog.update({
+      where: { id },
+      data: { shift: dto.shift },
+      include: {
+        activityType: true,
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        task: {
+          select: { id: true, taskNumber: true, reference: true },
+        },
+      },
+    })
+
+    this.realtime.publish({
+      entity: "ACTIVITY_LOG",
+      action: "UPDATED",
       id: log.id,
       payload: log,
     })

@@ -14,6 +14,7 @@ import { ActivityDepartment } from "@prisma/client"
 
 import { ActivityLogService } from "./activity-log.service"
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
+import { UpdateActivityLogDto } from "./dto/update-activity-log.dto"
 import { CreateActivityTypeDto } from "./dto/create-activity-type.dto"
 import { UpdateActivityTypeDto } from "./dto/update-activity-type.dto"
 
@@ -95,6 +96,16 @@ export class ActivityLogController {
     @Query("department") department?: ActivityDepartment,
   ) {
     return this.activityLogService.findMyToday(user.id, department, user.role)
+  }
+
+  @Permissions(PermissionCode.ACTIVITY_LOG_CREATE)
+  @Patch("activity-log/:id")
+  update(
+    @Param("id") id: string,
+    @Body() dto: UpdateActivityLogDto,
+    @CurrentUser() user: CurrentUserType,
+  ) {
+    return this.activityLogService.update(id, dto, user)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_DELETE)
