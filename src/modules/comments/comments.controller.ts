@@ -42,7 +42,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForTask(taskId,dto.message,user.id,dto.imageBase64)
+    return this.commentsService.createForTask(taskId,dto.message,user.id,dto.imageBase64,dto.parentId)
   }
 
   // ---- Nivel Proceso (WorkflowStep) ----
@@ -59,7 +59,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64)
+    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64,dto.parentId)
   }
 
   // ---- Nivel Proyecto ----
@@ -76,7 +76,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForProject(projectId,dto.message,user.id,dto.imageBase64)
+    return this.commentsService.createForProject(projectId,dto.message,user.id,dto.imageBase64,dto.parentId)
   }
 
   // ---- Compartido ----

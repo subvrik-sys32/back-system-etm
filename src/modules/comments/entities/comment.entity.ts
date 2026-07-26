@@ -13,6 +13,19 @@ export const commentInclude={
   user:{
     select:commentUserSelect,
   },
+  // Solo lo justo para mostrar "respondiendo a: fulano, 'texto'" en
+  // la UI — no se incluye el user completo del parent, ni se sigue
+  // la cadena hacia arriba (si el parent A SU VEZ es una respuesta).
+  parent:{
+    select:{
+      id:true,
+      message:true,
+      deletedAt:true,
+      user:{
+        select:{ id:true, name:true },
+      },
+    },
+  },
 } satisfies Prisma.CommentInclude
 
 export type CommentWithUser=Prisma.CommentGetPayload<{

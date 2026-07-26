@@ -82,10 +82,40 @@ export class CommentsService{
     return this.storage.uploadCompressedImage(COMMENT_PHOTOS_BUCKET, imageBase64)
   }
 
-  async createForTask(taskId:string,message:string|undefined,userId:string,imageBase64?:string){
+  // No dejar responder cruzado entre contextos (ej. citar por id un
+  // comentario de OTRA tarea, a mano, con el network tab abierto) —
+  // el comentario padre tiene que vivir en el mismo lugar donde se
+  // está por crear la respuesta.
+  private async assertSameContext(
+    parentId:string,
+    target:{ taskId?:string; projectId?:string; workflowStepId?:string|null },
+  ){
+
+    const parent=await this.commentRepository.findById(parentId)
+
+    if(!parent){
+      throw new NotFoundException("El comentario al que respondes ya no existe.")
+    }
+
+    const sameContext=
+      target.taskId!==undefined
+        ?parent.taskId===target.taskId&&parent.workflowStepId===(target.workflowStepId??null)
+        :parent.projectId===target.projectId
+
+    if(!sameContext){
+      throw new BadRequestException("No puedes responder a un comentario de otro lugar.")
+    }
+
+  }
+
+  async createForTask(taskId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
 
     if(!message?.trim()&&!imageBase64){
       throw new BadRequestException("El comentario necesita texto o una foto.")
+    }
+
+    if(parentId){
+      await this.assertSameContext(parentId,{ taskId, workflowStepId:null })
     }
 
     const imageUrl=
@@ -93,7 +123,7 @@ export class CommentsService{
         ?await this.uploadCommentPhoto(imageBase64)
         :null
 
-    const comment=await this.commentRepository.createForTask(taskId,userId,message??"",imageUrl)
+    const comment=await this.commentRepository.createForTask(taskId,userId,message??"",imageUrl,parentId)
 
     this.realtime.publish({
       entity:"COMMENT",
@@ -111,7 +141,7 @@ export class CommentsService{
     return comment
   }
 
-  async createForWorkflowStep(workflowStepId:string,message:string|undefined,userId:string,imageBase64?:string){
+  async createForWorkflowStep(workflowStepId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
 
     if(!message?.trim()&&!imageBase64){
       throw new BadRequestException("El comentario necesita texto o una foto.")
@@ -123,12 +153,16 @@ export class CommentsService{
       throw new NotFoundException("Workflow step not found")
     }
 
+    if(parentId){
+      await this.assertSameContext(parentId,{ taskId, workflowStepId })
+    }
+
     const imageUrl=
       imageBase64
         ?await this.uploadCommentPhoto(imageBase64)
         :null
 
-    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message??"",imageUrl)
+    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message??"",imageUrl,parentId)
 
     this.realtime.publish({
       entity:"COMMENT",
@@ -146,10 +180,14 @@ export class CommentsService{
     return comment
   }
 
-  async createForProject(projectId:string,message:string|undefined,userId:string,imageBase64?:string){
+  async createForProject(projectId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
 
     if(!message?.trim()&&!imageBase64){
       throw new BadRequestException("El comentario necesita texto o una foto.")
+    }
+
+    if(parentId){
+      await this.assertSameContext(parentId,{ projectId })
     }
 
     const imageUrl=
@@ -157,7 +195,7 @@ export class CommentsService{
         ?await this.uploadCommentPhoto(imageBase64)
         :null
 
-    const comment=await this.commentRepository.createForProject(projectId,userId,message??"",imageUrl)
+    const comment=await this.commentRepository.createForProject(projectId,userId,message??"",imageUrl,parentId)
 
     this.realtime.publish({
       entity:"COMMENT",

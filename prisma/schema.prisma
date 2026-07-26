@@ -79,39 +79,39 @@ model Client {
 }
 
 model User {
-  id                    String         @id @default(uuid())
-  name                  String
-  email                 String         @unique
-  passwordHash          String
-  roleId                String
-  level                 JobLevel       @default(GENERAL)
-  areaId                String?
-  active                Boolean        @default(true)
-  deletedAt             DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  username              String?        @unique
-  color                 String
-  icon                  String
-  avatarUrl             String?
-  phone                 String?
-  position              String?
-  auditLogs             AuditLog[]
-  createdProjects       Project[]      @relation("ProjectCreatedBy")
-  managedProjects       Project[]      @relation("ProjectPm")
-  updatedProjects       Project[]      @relation("ProjectUpdatedBy")
-  createdTasks          Task[]         @relation("TaskCreatedBy")
-  updatedTasks          Task[]         @relation("TaskUpdatedBy")
-  role                  Role           @relation(fields: [roleId], references: [id])
-  area                  Area?          @relation(fields: [areaId], references: [id])
-  workflowSteps         WorkflowStep[]
-  workflowStepsAssigned WorkflowStep[] @relation("WorkflowStepAssignedBy")
-  workflowStepsInvited  WorkflowStep[] @relation("WorkflowStepInvitedOperator")
+  id                     String         @id @default(uuid())
+  name                   String
+  email                  String         @unique
+  passwordHash           String
+  roleId                 String
+  level                  JobLevel       @default(GENERAL)
+  areaId                 String?
+  active                 Boolean        @default(true)
+  deletedAt              DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  username               String?        @unique
+  color                  String
+  icon                   String
+  avatarUrl              String?
+  phone                  String?
+  position               String?
+  auditLogs              AuditLog[]
+  createdProjects        Project[]      @relation("ProjectCreatedBy")
+  managedProjects        Project[]      @relation("ProjectPm")
+  updatedProjects        Project[]      @relation("ProjectUpdatedBy")
+  createdTasks           Task[]         @relation("TaskCreatedBy")
+  updatedTasks           Task[]         @relation("TaskUpdatedBy")
+  role                   Role           @relation(fields: [roleId], references: [id])
+  area                   Area?          @relation(fields: [areaId], references: [id])
+  workflowSteps          WorkflowStep[]
+  workflowStepsAssigned  WorkflowStep[] @relation("WorkflowStepAssignedBy")
+  workflowStepsInvited   WorkflowStep[] @relation("WorkflowStepInvitedOperator")
   workflowStepsInvitedBy WorkflowStep[] @relation("WorkflowStepInvitedBy")
-  comments              Comment[]
-  notificationsReceived Notification[] @relation("NotificationRecipient")
-  notificationsSent     Notification[] @relation("NotificationActor")
-  activityLogs          ActivityLog[]
+  comments               Comment[]
+  notificationsReceived  Notification[] @relation("NotificationRecipient")
+  notificationsSent      Notification[] @relation("NotificationActor")
+  activityLogs           ActivityLog[]
 }
 
 model Comment {
@@ -125,6 +125,14 @@ model Comment {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
+  // Reply — null en un comentario de primer nivel. onDelete: SetNull
+  // (no Cascade): si se borra el comentario padre, las respuestas NO
+  // desaparecen con él, solo pierden la referencia (quedan como
+  // comentarios sueltos) — Cascade acá borraría en cadena
+  // conversaciones enteras por accidente.
+  parentId       String?
+  parent         Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies        Comment[]      @relation("CommentReplies")
   task           Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workflowStep   WorkflowStep?  @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
@@ -134,6 +142,7 @@ model Comment {
   @@index([taskId])
   @@index([projectId])
   @@index([workflowStepId])
+  @@index([parentId])
 }
 
 model Notification {
@@ -324,45 +333,45 @@ model Task {
 }
 
 model WorkflowStep {
-  id            String         @id @default(uuid())
-  taskId        String
-  processCode   ProcessCode
-  status        WorkflowStatus
-  order         Int
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  paintKgReal   Float?
-  piecesOutput  Int?
-  plRtReal      Float?
-  reviewedAt    DateTime?
-  operatorId    String?
-  operator      User?          @relation(fields: [operatorId], references: [id])
+  id                String         @id @default(uuid())
+  taskId            String
+  processCode       ProcessCode
+  status            WorkflowStatus
+  order             Int
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  paintKgReal       Float?
+  piecesOutput      Int?
+  plRtReal          Float?
+  reviewedAt        DateTime?
+  operatorId        String?
+  operator          User?          @relation(fields: [operatorId], references: [id])
   // Quién puso a `operator` ahí mediante "Convocar" (modo ASSIGN) —
   // null cuando el propio operario se autoasignó (flujo normal de
   // ProcessOperatorCell al iniciar). Es lo que separa "Asignadas" de
   // "Disponibles" en Mis tareas — no es lo mismo que operatorId, que
   // solo dice QUIÉN está puesto, no CÓMO llegó ahí.
-  assignedById  String?
-  assignedBy    User?          @relation("WorkflowStepAssignedBy", fields: [assignedById], references: [id])
+  assignedById      String?
+  assignedBy        User?          @relation("WorkflowStepAssignedBy", fields: [assignedById], references: [id])
   // "Convocar" modo INVITE: invitación pendiente, operatorId NO se
   // toca todavía. Se resuelve (acepta/rechaza) desde el propio "Mis
   // tareas" del operario invitado — recién al aceptar, invitedOperatorId
   // pasa a operatorId y assignedById se llena con invitedById.
   invitedOperatorId String?
-  invitedOperator   User?      @relation("WorkflowStepInvitedOperator", fields: [invitedOperatorId], references: [id])
+  invitedOperator   User?          @relation("WorkflowStepInvitedOperator", fields: [invitedOperatorId], references: [id])
   invitedById       String?
-  invitedBy         User?      @relation("WorkflowStepInvitedBy", fields: [invitedById], references: [id])
+  invitedBy         User?          @relation("WorkflowStepInvitedBy", fields: [invitedById], references: [id])
   invitedAt         DateTime?
-  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  comments      Comment[]
-  notifications Notification[]
+  task              Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comments          Comment[]
+  notifications     Notification[]
   // Lista, no singular: antes ActivityLog.workflowStepId era
   // @unique a secas (un solo log por step), ahora es único por
   // (step, tipo) — así que un step puede tener hasta dos logs AUTO
   // acá (TASK_STARTED + TASK_COMPLETED).
-  activityLogs  ActivityLog[]
+  activityLogs      ActivityLog[]
 
   @@unique([taskId, processCode])
   @@index([taskId])
@@ -495,9 +504,9 @@ model ActivityLog {
   task           Task?             @relation(fields: [taskId], references: [id])
   workflowStep   WorkflowStep?     @relation(fields: [workflowStepId], references: [id])
 
+  @@unique([workflowStepId, activityTypeId])
   @@index([userId, loggedAt])
   @@index([projectId])
   @@index([taskId])
   @@index([source])
-  @@unique([workflowStepId, activityTypeId])
 }

@@ -46,23 +46,23 @@ export class CommentRepository{
     return step?.taskId??null
   }
 
-  createForTask(taskId:string,userId:string,message:string,imageUrl?:string|null){
+  createForTask(taskId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
     return this.prisma.comment.create({
-      data:{ taskId, userId, message:message.trim(), workflowStepId:null, imageUrl },
+      data:{ taskId, userId, message:message.trim(), workflowStepId:null, imageUrl, parentId },
       include:commentInclude,
     })
   }
 
-  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string,imageUrl?:string|null){
+  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
     return this.prisma.comment.create({
-      data:{ taskId, workflowStepId, userId, message:message.trim(), imageUrl },
+      data:{ taskId, workflowStepId, userId, message:message.trim(), imageUrl, parentId },
       include:commentInclude,
     })
   }
 
-  createForProject(projectId:string,userId:string,message:string,imageUrl?:string|null){
+  createForProject(projectId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
     return this.prisma.comment.create({
-      data:{ projectId, userId, message:message.trim(), imageUrl },
+      data:{ projectId, userId, message:message.trim(), imageUrl, parentId },
       include:commentInclude,
     })
   }

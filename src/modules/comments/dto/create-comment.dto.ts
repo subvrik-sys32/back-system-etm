@@ -14,4 +14,12 @@ export class CreateCommentDto{
   @IsString()
   imageBase64?:string
 
+  // Presente = este comentario es una respuesta a otro. El service
+  // valida que el parent exista y pertenezca al mismo contexto
+  // (tarea/proyecto/step) antes de guardar — acá solo se valida la
+  // forma.
+  @IsOptional()
+  @IsString()
+  parentId?:string
+
 }
