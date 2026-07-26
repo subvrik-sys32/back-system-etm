@@ -207,4 +207,30 @@ export class NotificationRepository{
       where:{ commentId },
     })
   }
+
+  // "Desconvocar" — deshace lo que hizo notifyTaskAssignment. Trae
+  // los ids ANTES de borrar porque el caller necesita avisarle al
+  // destinatario por realtime cuáles desaparecieron (mismo patrón
+  // que deleteByCommentId de arriba, que sí hace eso en
+  // deleteByCommentId de notifications.service.ts).
+  async findAndDeleteTaskAssignmentNotifications(workflowStepId:string,userId:string){
+
+    const rows=await this.prisma.notification.findMany({
+      where:{
+        workflowStepId,
+        userId,
+        type:{ in:["TASK_ASSIGNED","TASK_SUMMONED"] },
+      },
+      select:{ id:true },
+    })
+
+    if(rows.length===0)return []
+
+    await this.prisma.notification.deleteMany({
+      where:{ id:{ in:rows.map(r=>r.id) } },
+    })
+
+    return rows
+
+  }
 }

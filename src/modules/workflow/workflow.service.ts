@@ -451,31 +451,33 @@ export class WorkflowService {
       throw new BadRequestException("No se encontraron los pasos indicados")
     }
 
-    if (mode === "ASSIGN") {
+    const invitedAt = new Date()
 
-      await this.prisma.workflowStep.updateMany({
-        where: { id: { in: stepIds } },
-        data: {
-          operatorId,
-          assignedById: actorId,
-          invitedOperatorId: null,
-          invitedById: null,
-          invitedAt: null,
-        },
-      })
+    // El patch real que se le acaba de aplicar a CADA step — sin
+    // esto, propagateWorkflowUpdate (el que usan workflowHandler y
+    // processHandler en el frontend) recibe {taskId} sin `updated`
+    // y no hace nada: mismo bug que ACTIVITY_LOG, silencioso, cero
+    // error en consola. Los demás usuarios mirando la misma tarea
+    // se quedaban sin ver el cambio hasta refrescar la página.
+    const patch =
+      mode === "ASSIGN"
+        ? {
+            operatorId,
+            assignedById: actorId,
+            invitedOperatorId: null,
+            invitedById: null,
+            invitedAt: null,
+          }
+        : {
+            invitedOperatorId: operatorId,
+            invitedById: actorId,
+            invitedAt,
+          }
 
-    } else {
-
-      await this.prisma.workflowStep.updateMany({
-        where: { id: { in: stepIds } },
-        data: {
-          invitedOperatorId: operatorId,
-          invitedById: actorId,
-          invitedAt: new Date(),
-        },
-      })
-
-    }
+    await this.prisma.workflowStep.updateMany({
+      where: { id: { in: stepIds } },
+      data: patch,
+    })
 
     for (const step of steps) {
 
@@ -496,13 +498,10 @@ export class WorkflowService {
         // no crítico, ver comentario arriba
       })
 
-      this.realtime.publish({
-        entity: "WORKFLOW",
-        action: "UPDATED",
-        id: step.taskId,
-        payload: { taskId: step.taskId },
-        excludeUserId: actorId,
-      })
+      this.publishDelta(
+        { taskId: step.taskId, updated: [{ id: step.id, ...patch }] },
+        actorId,
+      )
 
     }
 
@@ -532,13 +531,20 @@ export class WorkflowService {
       },
     })
 
-    this.realtime.publish({
-      entity: "WORKFLOW",
-      action: "UPDATED",
-      id: step.taskId,
-      payload: { taskId: step.taskId },
-      excludeUserId: userId,
-    })
+    this.publishDelta(
+      {
+        taskId: step.taskId,
+        updated: [{
+          id: step.id,
+          operatorId: userId,
+          assignedById: step.invitedById,
+          invitedOperatorId: null,
+          invitedById: null,
+          invitedAt: null,
+        }],
+      },
+      userId,
+    )
 
     return { success: true }
 
@@ -564,13 +570,75 @@ export class WorkflowService {
       },
     })
 
-    this.realtime.publish({
-      entity: "WORKFLOW",
-      action: "UPDATED",
-      id: step.taskId,
-      payload: { taskId: step.taskId },
-      excludeUserId: userId,
+    this.publishDelta(
+      {
+        taskId: step.taskId,
+        updated: [{ id: step.id, invitedOperatorId: null, invitedById: null, invitedAt: null }],
+      },
+      userId,
+    )
+
+    return { success: true }
+
+  }
+
+  // "Desconvocar" — el supervisor deshace lo que hizo summon(),
+  // sea ASSIGN (operatorId puesto ya mismo) o INVITE (invitación
+  // pendiente): limpia los campos correspondientes Y borra la
+  // notificación que se había mandado, para que no le quede
+  // colgada a alguien que ya no tiene nada que ver con esto.
+  async unsummon(stepId: string, actorId: string) {
+
+    const step = await this.prisma.workflowStep.findUnique({
+      where: { id: stepId },
+      select: {
+        id: true,
+        taskId: true,
+        operatorId: true,
+        assignedById: true,
+        invitedOperatorId: true,
+      },
     })
+
+    if (!step) {
+      throw new BadRequestException("Paso no encontrado")
+    }
+
+    // A quién afecta esto — el destinatario de la notificación que
+    // hay que retirar. Si fue INVITE, es el invitado; si fue ASSIGN
+    // (via Convocar, no autoasignación normal), es el operatorId
+    // actual.
+    const affectedUserId = step.invitedOperatorId ?? (step.assignedById ? step.operatorId : null)
+
+    if (!affectedUserId) {
+      throw new BadRequestException("Este paso no tiene ninguna convocatoria activa para deshacer")
+    }
+
+    const clearedFields = {
+      invitedOperatorId: null,
+      invitedById: null,
+      invitedAt: null,
+    }
+
+    const patch = step.assignedById
+      ? { operatorId: null, assignedById: null, ...clearedFields }
+      : clearedFields
+
+    await this.prisma.workflowStep.update({
+      where: { id: stepId },
+      data: patch,
+    })
+
+    await this.notifications.retractTaskAssignment(step.id, affectedUserId).catch(() => {
+      // no crítico — el cambio real (arriba) ya se persistió; si
+      // esto falla, la notificación le queda colgada al operario
+      // pero la convocatoria en sí ya se deshizo.
+    })
+
+    this.publishDelta(
+      { taskId: step.taskId, updated: [{ id: step.id, ...patch }] },
+      actorId,
+    )
 
     return { success: true }
 

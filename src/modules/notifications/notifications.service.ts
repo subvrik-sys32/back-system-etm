@@ -347,6 +347,29 @@ export class NotificationsService{
 
   }
 
+  // "Desconvocar" desde TaskAreaPanel — deshace notifyTaskAssignment:
+  // borra la(s) notificación(es) que se le habían mandado a este
+  // operario por este step, y le avisa por realtime que
+  // desaparecieron (mismo patrón que remove()/removeAll() de más
+  // arriba).
+  async retractTaskAssignment(workflowStepId:string,userId:string){
+
+    const deleted=await this.notificationRepository.findAndDeleteTaskAssignmentNotifications(
+      workflowStepId,
+      userId,
+    )
+
+    for(const notification of deleted){
+      this.realtime.publishToUser(userId,{
+        entity:"NOTIFICATION",
+        action:"DELETED",
+        id:notification.id,
+        payload:{ id:notification.id },
+      })
+    }
+
+  }
+
   async markTargetAsRead(
     userId:string,
     target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string } | { scope:"project"; projectId:string },

@@ -336,4 +336,27 @@ export class WorkflowController{
 
   }
 
+  // "Desconvocar" — mismo permiso que summon(), el que convocó (o
+  // cualquier supervisor/admin) puede deshacerlo.
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Patch(":id/unsummon")
+  unsummon(
+
+    @Param("id")
+    id:string,
+
+    @CurrentUser()
+    user:CurrentUserType,
+
+  ){
+
+    return this.workflowService.unsummon(
+      id,
+      user.id,
+    )
+
+  }
+
 }
