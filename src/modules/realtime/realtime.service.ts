@@ -11,7 +11,7 @@ import {
 interface InternalConnection {
   id: string;
   userId: string;
-  role?: string;
+  roles?: string[];
   userAgent?: string;
   response: Response;
   subject: Subject<RealtimeEvent>;
@@ -31,7 +31,7 @@ export class RealtimeService {
 
   connect(
     userId: string,
-    role: string | undefined,
+    roles: string[] | undefined,
     response: Response,
     userAgent?: string,
   ): string {
@@ -62,7 +62,7 @@ export class RealtimeService {
     const connection: InternalConnection = {
       id: connectionId,
       userId,
-      role,
+      roles,
       userAgent,
       response,
       subject,
@@ -203,7 +203,7 @@ export class RealtimeService {
         result.push({
           connectionId: connection.id,
           userId: connection.userId,
-          role: connection.role,
+          roles: connection.roles,
           userAgent: connection.userAgent,
           connectedAt: connection.connectedAt,
         });
@@ -246,7 +246,7 @@ export class RealtimeService {
     roles: string[],
   ): boolean {
     for (const connection of userConnections.values()) {
-      if (connection.role && roles.includes(connection.role)) return true;
+      if (connection.roles?.some((role) => roles.includes(role))) return true;
     }
     return false;
   }

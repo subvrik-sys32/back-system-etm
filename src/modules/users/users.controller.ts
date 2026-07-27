@@ -49,6 +49,8 @@ import { UpdateProfileDto } from "./dto/update-profile.dto"
 
 import { UpdateAvatarDto } from "./dto/update-avatar.dto"
 
+import { CreateUserPermissionOverrideDto } from "./dto/create-user-permission-override.dto"
+
 @Controller("users")
 export class UsersController {
 
@@ -225,6 +227,70 @@ export class UsersController {
       id,
       user.id,
     )
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+    PermissionsGuard,
+  )
+  @Permissions(
+    PermissionCode.USER_PERMISSION_OVERRIDE_MANAGE,
+  )
+  @Get(":id/permission-overrides")
+  findPermissionOverrides(
+    @Param("id")
+    id: string,
+  ) {
+
+    return this.usersService.findPermissionOverrides(id)
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+    PermissionsGuard,
+  )
+  @Permissions(
+    PermissionCode.USER_PERMISSION_OVERRIDE_MANAGE,
+  )
+  @Post(":id/permission-overrides")
+  setPermissionOverride(
+    @Param("id")
+    id: string,
+
+    @Body()
+    dto: CreateUserPermissionOverrideDto,
+
+    @CurrentUser()
+    user: CurrentUserType,
+  ) {
+
+    return this.usersService.setPermissionOverride(
+      id,
+      dto,
+      user.id,
+    )
+
+  }
+
+  @UseGuards(
+    JwtAuthGuard,
+    PermissionsGuard,
+  )
+  @Permissions(
+    PermissionCode.USER_PERMISSION_OVERRIDE_MANAGE,
+  )
+  @Delete(":id/permission-overrides/:overrideId")
+  removePermissionOverride(
+    @Param("id")
+    id: string,
+
+    @Param("overrideId")
+    overrideId: string,
+  ) {
+
+    return this.usersService.removePermissionOverride(id, overrideId)
 
   }
 

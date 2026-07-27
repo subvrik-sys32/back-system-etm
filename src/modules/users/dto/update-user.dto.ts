@@ -1,4 +1,5 @@
 import {
+  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -30,9 +31,15 @@ export class UpdateUserDto {
   @MinLength(8)
   password?: string
 
+  // undefined = no tocar los roles actuales; un array reemplaza el
+  // conjunto completo — pero nunca puede quedar vacío (a diferencia
+  // de areaIds), un usuario siempre necesita al menos un rol.
   @IsOptional()
-  @IsUUID()
-  roleId?: string
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  roleIds?: string[]
 
   @IsOptional()
   @IsEnum(JobLevel)

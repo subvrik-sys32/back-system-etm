@@ -28,7 +28,7 @@ export class AuthUserDto {
   avatarUrl!: string | null
   phone!: string | null
   position!: string | null
-  role!: AuthRoleDto
+  roles!: AuthRoleDto[]
   areas!: AuthAreaDto[]
 }
 

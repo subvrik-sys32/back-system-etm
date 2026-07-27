@@ -22,14 +22,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: {
     sub: string
     email: string
-    role: string
+    roles: string[]
     level: JobLevel
     permissions: string[]
   }) {
     return {
       id: payload.sub,
       email: payload.email,
-      role: payload.role,
+      roles: payload.roles,
       level: payload.level,
       permissions: payload.permissions,
     }

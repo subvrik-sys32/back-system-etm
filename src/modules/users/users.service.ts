@@ -17,6 +17,7 @@ import { UpdateUserDto } from "./dto/update-user.dto"
 
 import { UpdateProfileDto } from "./dto/update-profile.dto"
 import { UpdateAvatarDto } from "./dto/update-avatar.dto"
+import { CreateUserPermissionOverrideDto } from "./dto/create-user-permission-override.dto"
 
 @Injectable()
 export class UsersService {
@@ -31,7 +32,7 @@ export class UsersService {
 
     const users = await this.prisma.user.findMany({
       where: { deletedAt: null },
-      include: { role: true, areas: true },
+      include: { roles: true, areas: true },
       omit: { passwordHash: true },
       orderBy: { createdAt: "asc" },
     })
@@ -46,7 +47,7 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
-      include: { role: true, areas: true },
+      include: { roles: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -67,7 +68,7 @@ export class UsersService {
       ? JobLevel.GENERAL 
       : dto.level
 
-    await this.assertLevelMatchesRole(dto.roleId, targetLevel)
+    await this.assertLevelMatchesRoles(dto.roleIds, targetLevel)
     this.assertAreasMatchLevel(dto.areaIds, targetLevel)
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
@@ -78,7 +79,9 @@ export class UsersService {
         name: dto.name,
         email: dto.email,
         passwordHash,
-        roleId: dto.roleId,
+        roles: {
+          connect: dto.roleIds.map(id => ({ id })),
+        },
         level: targetLevel,
         // Solo un OPERARIO puede tener áreas fijas — si por lo que
         // sea llegaran areaIds con otro level (no debería, ya lo
@@ -94,7 +97,7 @@ export class UsersService {
         color: dto.color,
         active: dto.active ?? true,
       },
-      include: { role: true, areas: true },
+      include: { roles: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -115,10 +118,9 @@ export class UsersService {
       where: { id },
       select: {
         id: true,
-        roleId: true,
         level: true,
-        role: {
-          select: { code: true },
+        roles: {
+          select: { id: true, code: true },
         },
       },
     })
@@ -127,8 +129,14 @@ export class UsersService {
       throw new NotFoundException("User not found")
     }
 
-    // Rol efectivo tras este update
-    const effectiveRoleId = dto.roleId ?? existing.roleId
+    const existingRoleIds = existing.roles.map(role => role.id)
+
+    // Roles efectivos tras este update
+    const effectiveRoleIds = dto.roleIds ?? existingRoleIds
+
+    const rolesChanged =
+      dto.roleIds !== undefined &&
+      !this.sameIdSet(dto.roleIds, existingRoleIds)
 
     // 1. Resolver el nuevo valor de 'level'
     let levelToUpdate: JobLevel | undefined
@@ -140,31 +148,33 @@ export class UsersService {
       levelToUpdate = dto.level
     }
 
-    // 2. Si no enviaron level pero cambiaron a un rol que NO es PRODUCCION, forzamos GENERAL
+    // 2. Si no enviaron level pero cambiaron el conjunto de roles a
+    // uno donde YA NINGÚN rol es compatible con el level actual,
+    // forzamos GENERAL — mismo criterio aditivo que
+    // assertLevelMatchesRoles: alcanza con que UNO solo de los
+    // roles nuevos siga habilitando el level para no tocarlo.
     if (
-      dto.roleId &&
-      dto.roleId !== existing.roleId &&
+      rolesChanged &&
       levelToUpdate === undefined &&
       existing.level !== JobLevel.GENERAL
     ) {
-      const nextRole = await this.prisma.role.findUnique({
-        where: { id: dto.roleId },
+      const nextRoles = await this.prisma.role.findMany({
+        where: { id: { in: effectiveRoleIds } },
         select: { code: true },
       })
 
-      if (
-        !this.isLevelAllowedForRole(
-          nextRole?.code,
-          existing.level,
-        )
-      ) {
+      const stillAllowed = nextRoles.some(role =>
+        this.isLevelAllowedForRole(role.code, existing.level),
+      )
+
+      if (!stillAllowed) {
         levelToUpdate = JobLevel.GENERAL
       }
     }
 
-    // 3. Validar consistencia de Sub-nivel vs Rol
+    // 3. Validar consistencia de Sub-nivel vs Roles
     if (levelToUpdate) {
-      await this.assertLevelMatchesRole(effectiveRoleId, levelToUpdate)
+      await this.assertLevelMatchesRoles(effectiveRoleIds, levelToUpdate)
     }
 
     // 4. Resolver 'areas' — mismo criterio que 'level' arriba:
@@ -196,7 +206,10 @@ export class UsersService {
         username: dto.username,
         name: dto.name,
         email: dto.email,
-        roleId: dto.roleId,
+        roles:
+          dto.roleIds !== undefined
+            ? { set: dto.roleIds.map(roleId => ({ id: roleId })) }
+            : undefined,
         level: levelToUpdate, // Jamás será null
         areas: areasUpdate,
         icon: dto.icon,
@@ -204,7 +217,7 @@ export class UsersService {
         active: dto.active,
         passwordHash,
       },
-      include: { role: true, areas: true },
+      include: { roles: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -228,7 +241,7 @@ export class UsersService {
         phone: dto.phone,
         position: dto.position,
       },
-      include: { role: true },
+      include: { roles: true },
       omit: { passwordHash: true },
     })
 
@@ -261,7 +274,7 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { avatarUrl },
-      include: { role: true },
+      include: { roles: true },
       omit: { passwordHash: true },
     })
 
@@ -310,8 +323,11 @@ export class UsersService {
 
   }
 
-  private async assertLevelMatchesRole(
-    roleId: string | undefined,
+  // Criterio aditivo (mismo espíritu que los permisos: la unión de
+  // todos los roles): con que UNO SOLO de los roles del usuario
+  // habilite el level alcanza, no hace falta que todos lo permitan.
+  private async assertLevelMatchesRoles(
+    roleIds: string[] | undefined,
     level: JobLevel | undefined | null,
   ) {
 
@@ -319,18 +335,22 @@ export class UsersService {
       return
     }
 
-    if (!roleId) {
+    if (!roleIds || roleIds.length === 0) {
       return
     }
 
-    const role = await this.prisma.role.findUnique({
-      where: { id: roleId },
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
       select: { code: true },
     })
 
-    if (!this.isLevelAllowedForRole(role?.code, level)) {
+    const allowed = roles.some(role =>
+      this.isLevelAllowedForRole(role.code, level),
+    )
+
+    if (!allowed) {
       throw new BadRequestException(
-        "El sub-nivel (level) no es válido para el departamento del usuario",
+        "El sub-nivel (level) no es válido para ninguno de los roles del usuario",
       )
     }
 
@@ -354,6 +374,18 @@ export class UsersService {
         "Las áreas solo aplican para usuarios con sub-nivel OPERARIO",
       )
     }
+
+  }
+
+  private sameIdSet(a: string[], b: string[]): boolean {
+
+    if (a.length !== b.length) {
+      return false
+    }
+
+    const setB = new Set(b)
+
+    return a.every(id => setB.has(id))
 
   }
 
@@ -386,7 +418,7 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { avatarUrl: null },
-      include: { role: true },
+      include: { roles: true },
       omit: { passwordHash: true },
     })
 
@@ -419,6 +451,125 @@ export class UsersService {
     return user
   }
 
+  // ---- Overrides de permisos por usuario ----
+
+  async findPermissionOverrides(userId: string) {
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true },
+    })
+
+    if (!user) {
+      throw new NotFoundException("User not found")
+    }
+
+    return this.prisma.userPermission.findMany({
+      where: { userId },
+      include: {
+        permission: true,
+        grantedBy: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    })
+
+  }
+
+  // Un mismo permiso no puede tener dos overrides a la vez para el
+  // mismo usuario (ver @@unique en el schema) — si ya existe uno
+  // para ese permiso, se reemplaza (upsert) en vez de acumular filas
+  // contradictorias.
+  async setPermissionOverride(
+    userId: string,
+    dto: CreateUserPermissionOverrideDto,
+    grantedById: string,
+  ) {
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true },
+    })
+
+    if (!user) {
+      throw new NotFoundException("User not found")
+    }
+
+    const permission = await this.prisma.permission.findUnique({
+      where: { id: dto.permissionId },
+      select: { id: true },
+    })
+
+    if (!permission) {
+      throw new BadRequestException("El permiso indicado no existe")
+    }
+
+    const override = await this.prisma.userPermission.upsert({
+      where: {
+        userId_permissionId: {
+          userId,
+          permissionId: dto.permissionId,
+        },
+      },
+      create: {
+        userId,
+        permissionId: dto.permissionId,
+        effect: dto.effect,
+        reason: dto.reason,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        grantedById,
+      },
+      update: {
+        effect: dto.effect,
+        reason: dto.reason,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        grantedById,
+      },
+      include: {
+        permission: true,
+        grantedBy: {
+          select: { id: true, name: true },
+        },
+      },
+    })
+
+    // Al usuario afectado, para que su sesión refleje el override
+    // sin esperar a que refresque manualmente — mismo mecanismo que
+    // publishToRole en RolesService.updatePermissions.
+    this.realtime.publishToUser(userId, {
+      entity: "USER_PERMISSION_OVERRIDE",
+      action: "UPDATED",
+      payload: { userId },
+    })
+
+    return override
+
+  }
+
+  async removePermissionOverride(userId: string, overrideId: string) {
+
+    const existing = await this.prisma.userPermission.findUnique({
+      where: { id: overrideId },
+      select: { id: true, userId: true },
+    })
+
+    if (!existing || existing.userId !== userId) {
+      throw new NotFoundException("Override de permiso no encontrado")
+    }
+
+    await this.prisma.userPermission.delete({
+      where: { id: overrideId },
+    })
+
+    this.realtime.publishToUser(userId, {
+      entity: "USER_PERMISSION_OVERRIDE",
+      action: "DELETED",
+      payload: { userId },
+    })
+
+  }
+
   async directory() {
 
     const users = await this.prisma.user.findMany({
@@ -431,7 +582,8 @@ export class UsersService {
         level: true,
         color: true,
         icon: true,
-        role: {
+        // Array ahora (m2m) — antes un solo role obligatorio por FK.
+        roles: {
           select: { code: true },
         },
         // Faltaba por completo — sin esto, useAreaOperators

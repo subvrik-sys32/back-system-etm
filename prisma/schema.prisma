@@ -44,6 +44,9 @@ model Role {
   color       String
   icon        String
   permissions RolePermission[]
+  // Antes lado inverso de la FK User.roleId (uno a muchos). Ahora
+  // m2m implícito (ver User.roles) — Prisma resuelve la tabla de
+  // unión sola con declarar el array en los dos lados.
   users       User[]
 }
 
@@ -54,6 +57,7 @@ model Permission {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   roles       RolePermission[]
+  userOverrides UserPermission[]
 }
 
 model RolePermission {
@@ -83,7 +87,6 @@ model User {
   name                   String
   email                  String         @unique
   passwordHash           String
-  roleId                 String
   level                  JobLevel       @default(GENERAL)
   active                 Boolean        @default(true)
   deletedAt              DateTime?
@@ -101,7 +104,20 @@ model User {
   updatedProjects        Project[]      @relation("ProjectUpdatedBy")
   createdTasks           Task[]         @relation("TaskCreatedBy")
   updatedTasks           Task[]         @relation("TaskUpdatedBy")
-  role                   Role           @relation(fields: [roleId], references: [id])
+  // Muchos a muchos — antes un roleId único (FK, un solo rol por
+  // usuario). Ahora puede tener varios roles simultáneos (ej.
+  // alguien que es INGENIERIA y PROYECTOS a la vez). Mismo patrón
+  // m2m implícito que areas: sin tabla intermedia a mano, con
+  // declarar Role[]/User[] en los dos lados alcanza. Un usuario
+  // siempre tiene al menos un rol (se valida en el DTO/servicio,
+  // no acá — Prisma no expresa "mínimo 1" en un m2m).
+  roles                  Role[]
+  // Overrides puntuales por usuario (ALLOW/DENY) por encima de los
+  // permisos que ya le dan sus roles — ver UserPermission. Como
+  // "grantedBy" también apunta a User, hace falta @relation con
+  // nombre en los dos lados para desambiguar cuál FK es cuál.
+  permissionOverrides    UserPermission[] @relation("UserPermissionOverrides")
+  permissionOverridesGranted UserPermission[] @relation("UserPermissionGrantedBy")
   // Muchos a muchos — antes un OPERARIO tenía un solo área fija
   // (areaId). Ahora puede pertenecer a varias (ej. alguien que
   // rota entre Ingeniería y Producción). Relación m2m implícita de
@@ -117,6 +133,46 @@ model User {
   notificationsReceived  Notification[] @relation("NotificationRecipient")
   notificationsSent      Notification[] @relation("NotificationActor")
   activityLogs           ActivityLog[]
+}
+
+// ALLOW añade un permiso puntual que los roles del usuario no le
+// dan; DENY se lo saca aunque alguno de sus roles sí lo incluya.
+// DENY siempre gana sobre ALLOW si (por lo que sea) hubiera overrides
+// contradictorios para el mismo permiso — ver AuthService donde se
+// calculan los permisos efectivos. expiresAt es opcional: un override
+// sin vencimiento queda indefinido hasta que alguien lo revoque a
+// mano; con vencimiento, AuthService lo ignora solo (no hace falta
+// un job que los borre).
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+model UserPermission {
+  id           String           @id @default(uuid())
+  userId       String
+  permissionId String
+  effect       PermissionEffect
+  // Por qué se otorgó/revocó este permiso puntual — queda en el
+  // historial aunque el override se revoque después (no se borra
+  // la fila al desactivar, ver `active` más abajo... en realidad no
+  // hay `active`: revocar = delete directo, este `reason` es lo
+  // único que explica el porqué mientras estuvo vigente).
+  reason       String?
+  expiresAt    DateTime?
+  grantedById  String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  user         User             @relation("UserPermissionOverrides", fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission       @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedBy    User             @relation("UserPermissionGrantedBy", fields: [grantedById], references: [id])
+
+  // Un mismo usuario no puede tener dos overrides activos para el
+  // mismo permiso (ambigüedad: ¿cuál vale?) — para cambiarlo, se
+  // borra el viejo y se crea uno nuevo, no se acumulan.
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Comment {

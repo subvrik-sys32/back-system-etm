@@ -11,13 +11,70 @@ import {
   PrismaService,
 } from "@/infra/database/prisma/prisma.service"
 
-import { JobLevel } from "@prisma/client"
+import { JobLevel, PermissionEffect } from "@prisma/client"
 import * as bcrypt from "bcrypt"
 
 import type {
   LoginResponseDto,
   MeResponseDto,
 } from "./dto/auth-response.dto"
+
+// Include compartido por login/refresh/me — roles con sus permisos
+// (para armar la unión) + los overrides puntuales del propio
+// usuario (para aplicar ALLOW/DENY encima) + areas, igual que antes.
+const SESSION_USER_INCLUDE = {
+  roles: {
+    include: {
+      permissions: {
+        include: {
+          permission: true,
+        },
+      },
+    },
+  },
+  permissionOverrides: {
+    include: {
+      permission: true,
+    },
+  },
+  areas: true,
+} as const
+
+type SessionUser = {
+  id: string
+  username: string | null
+  name: string
+  email: string
+  level: JobLevel
+  icon: string
+  color: string
+  active: boolean
+  avatarUrl: string | null
+  phone: string | null
+  position: string | null
+  roles: {
+    id: string
+    code: string
+    name: string
+    icon: string
+    color: string
+    active: boolean
+    permissions: {
+      permission: { code: string }
+    }[]
+  }[]
+  permissionOverrides: {
+    effect: PermissionEffect
+    expiresAt: Date | null
+    permission: { code: string }
+  }[]
+  areas: {
+    id: string
+    code: string
+    label: string
+    processCode: string | null
+  }[]
+}
 
 @Injectable()
 export class AuthService {
@@ -37,18 +94,7 @@ export class AuthService {
         where: {
           email,
         },
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-          areas: true,
-        },
+        include: SESSION_USER_INCLUDE,
       })
 
     if (!user) {
@@ -82,18 +128,7 @@ export class AuthService {
         where: {
           id: userId,
         },
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-          areas: true,
-        },
+        include: SESSION_USER_INCLUDE,
       })
 
     if (!user) {
@@ -106,50 +141,73 @@ export class AuthService {
 
   }
 
-  private async issueSession(
-    user: {
-      id: string
-      username: string | null
-      name: string
-      email: string
-      level: JobLevel
-      icon: string
-      color: string
-      active: boolean
-      avatarUrl: string | null
-      phone: string | null
-      position: string | null
-      role: {
-        id: string
-        code: string
-        name: string
-        icon: string
-        color: string
-        active: boolean
-        permissions: {
-          permission: { code: string }
-        }[]
+  // Permisos efectivos = unión de los permisos de TODOS los roles
+  // del usuario, más los overrides ALLOW que no estén vencidos,
+  // menos los overrides DENY que no estén vencidos. DENY siempre
+  // gana: si (por lo que sea) un mismo código quedara con ALLOW y
+  // DENY a la vez, se aplica el DENY. Los overrides vencidos
+  // (expiresAt en el pasado) se ignoran solos, sin necesidad de un
+  // job que los borre.
+  private computeEffectivePermissions(
+    user: Pick<SessionUser, "roles" | "permissionOverrides">,
+  ): string[] {
+
+    const rolePermissions = new Set<string>()
+
+    for (const role of user.roles) {
+      for (const rolePermission of role.permissions) {
+        rolePermissions.add(rolePermission.permission.code)
       }
-      areas: {
-        id: string
-        code: string
-        label: string
-        processCode: string | null
-      }[]
-    },
+    }
+
+    const now = new Date()
+
+    const allows = new Set<string>()
+    const denies = new Set<string>()
+
+    for (const override of user.permissionOverrides) {
+
+      if (override.expiresAt && override.expiresAt < now) {
+        continue
+      }
+
+      if (override.effect === PermissionEffect.DENY) {
+        denies.add(override.permission.code)
+      } else {
+        allows.add(override.permission.code)
+      }
+
+    }
+
+    const effective = new Set<string>(rolePermissions)
+
+    for (const code of allows) {
+      effective.add(code)
+    }
+
+    for (const code of denies) {
+      effective.delete(code)
+    }
+
+    return Array.from(effective)
+
+  }
+
+  private async issueSession(
+    user: SessionUser,
   ): Promise<LoginResponseDto> {
 
     const permissions =
-      user.role.permissions.map(
-        permission =>
-          permission.permission.code,
-      )
+      this.computeEffectivePermissions(user)
+
+    const roleCodes =
+      user.roles.map(role => role.code)
 
     const accessToken =
       await this.jwt.signAsync({
         sub: user.id,
         email: user.email,
-        role: user.role.code,
+        roles: roleCodes,
         level: user.level,
         permissions,
       })
@@ -169,14 +227,14 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         phone: user.phone,
         position: user.position,
-        role: {
-          id: user.role.id,
-          code: user.role.code,
-          name: user.role.name,
-          icon: user.role.icon,
-          color: user.color,
-          active: user.role.active,
-        },
+        roles: user.roles.map(role => ({
+          id: role.id,
+          code: role.code,
+          name: role.name,
+          icon: role.icon,
+          color: role.color,
+          active: role.active,
+        })),
         // Array ahora (m2m) — antes un solo area nullable.
         areas: user.areas.map(area => ({
           id: area.id,
@@ -198,18 +256,7 @@ export class AuthService {
         where: {
           id: userId,
         },
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-          areas: true,
-        },
+        include: SESSION_USER_INCLUDE,
         omit: {
           passwordHash: true,
         },
@@ -222,10 +269,7 @@ export class AuthService {
     }
 
     const permissions =
-      user.role.permissions.map(
-        permission =>
-          permission.permission.code,
-      )
+      this.computeEffectivePermissions(user)
 
     return {
       permissions,
@@ -241,14 +285,14 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         phone: user.phone,
         position: user.position,
-        role: {
-          id: user.role.id,
-          code: user.role.code,
-          name: user.role.name,
-          icon: user.role.icon,
-          color: user.role.color,
-          active: user.role.active,
-        },
+        roles: user.roles.map(role => ({
+          id: role.id,
+          code: role.code,
+          name: role.name,
+          icon: role.icon,
+          color: role.color,
+          active: role.active,
+        })),
         // Array ahora (m2m) — antes un solo area nullable.
         areas: user.areas.map(area => ({
           id: area.id,

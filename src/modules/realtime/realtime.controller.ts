@@ -6,7 +6,7 @@ import { RealtimeService } from './realtime.service';
 interface AuthenticatedRequest extends Request {
   user: {
     id: string;
-    role?: string;
+    roles?: string[];
   };
 }
 
@@ -18,10 +18,10 @@ export class RealtimeController {
   @Get('events')
   connect(@Req() req: AuthenticatedRequest, @Res() res: Response): void {
     const userId = req.user.id;
-    const role = req.user.role;
+    const roles = req.user.roles;
     const userAgent = req.headers['user-agent'];
 
-    const connectionId = this.realtimeService.connect(userId, role, res, userAgent);
+    const connectionId = this.realtimeService.connect(userId, roles, res, userAgent);
 
     req.on('close', () => {
       this.realtimeService.disconnect(userId, connectionId);

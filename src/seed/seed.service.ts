@@ -122,13 +122,31 @@ export class SeedService {
           where: { code: mapping.newCode },
         })
 
-      await this.prisma.user.updateMany({
-        where: { roleId: legacyRole.id },
-        data: {
-          roleId: newRole.id,
-          ...(mapping.level && { level: mapping.level }),
-        },
-      })
+      // updateMany no soporta tocar relaciones m2m — a diferencia
+      // del roleId escalar de antes, ahora hay que traer los
+      // usuarios que tengan el rol legado y conectar/desconectar
+      // uno por uno. connect+disconnect en el mismo update es
+      // atómico por usuario: nadie queda un instante sin rol.
+      const usersWithLegacyRole =
+        await this.prisma.user.findMany({
+          where: { roles: { some: { id: legacyRole.id } } },
+          select: { id: true },
+        })
+
+      for (const user of usersWithLegacyRole) {
+
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            roles: {
+              connect: { id: newRole.id },
+              disconnect: { id: legacyRole.id },
+            },
+            ...(mapping.level && { level: mapping.level }),
+          },
+        })
+
+      }
 
       await this.prisma.role.delete({
         where: { id: legacyRole.id },
@@ -148,7 +166,7 @@ export class SeedService {
 
       const usersOnGerencia =
         await this.prisma.user.count({
-          where: { roleId: gerenciaRole.id },
+          where: { roles: { some: { id: gerenciaRole.id } } },
         })
 
       if (usersOnGerencia === 0) {
@@ -502,7 +520,7 @@ export class SeedService {
         name: "Administrador ETM",
         email: "admin@etmperu.com",
         passwordHash,
-        roleId: adminRole.id,
+        roles: { connect: { id: adminRole.id } },
         level: JobLevel.GENERAL,
         icon: "user",
         color: "#7C3AED",
@@ -511,7 +529,11 @@ export class SeedService {
       update: {
         username: "admin",
         name: "Administrador ETM",
-        roleId: adminRole.id,
+        // set (no connect): así el admin siempre queda con
+        // EXACTAMENTE el rol ADMIN en cada corrida del seed, sin
+        // acumular roles de corridas anteriores si alguna vez se le
+        // agregó otro a mano.
+        roles: { set: [{ id: adminRole.id }] },
         level: JobLevel.GENERAL,
         icon: "user",
         color: "#7C3AED",

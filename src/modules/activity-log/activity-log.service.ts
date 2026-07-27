@@ -81,9 +81,9 @@ export class ActivityLogService {
   // con el permiso), acá el permiso no alcanza: se valida también
   // el rol. ADMIN pasa siempre (mismo criterio que el resto del
   // sistema: ve todo).
-  private assertEngineeringAccess(role: string) {
+  private assertEngineeringAccess(roles: string[]) {
 
-    if (role !== "ADMIN" && role !== "INGENIERIA") {
+    if (!roles.includes("ADMIN") && !roles.includes("INGENIERIA")) {
       throw new ForbiddenException(
         "La Bitácora de Ingeniería es solo para ese equipo.",
       )
@@ -91,10 +91,10 @@ export class ActivityLogService {
 
   }
 
-  findAllTypes(includeInactive = false, department?: ActivityDepartment, role?: string) {
+  findAllTypes(includeInactive = false, department?: ActivityDepartment, roles?: string[]) {
 
-    if (department === ActivityDepartment.INGENIERIA && role) {
-      this.assertEngineeringAccess(role)
+    if (department === ActivityDepartment.INGENIERIA && roles) {
+      this.assertEngineeringAccess(roles)
     }
 
     return this.prisma.activityType.findMany({
@@ -169,7 +169,7 @@ export class ActivityLogService {
 
   // ---- Entradas de bitácora ----
 
-  async create(userId: string, dto: CreateActivityLogDto, role: string) {
+  async create(userId: string, dto: CreateActivityLogDto, roles: string[]) {
 
     const type = await this.prisma.activityType.findUnique({
       where: { id: dto.activityTypeId },
@@ -181,7 +181,7 @@ export class ActivityLogService {
     }
 
     if (type.department === ActivityDepartment.INGENIERIA) {
-      this.assertEngineeringAccess(role)
+      this.assertEngineeringAccess(roles)
     }
 
     // Si viene taskId, se valida que la tarea exista y (si también
@@ -493,10 +493,10 @@ export class ActivityLogService {
   // acota con un límite superior (getEndOfDayInLima) solo cuando
   // hay `date` explícito — sin eso, "hoy" se sigue comportando
   // igual que antes (sin tope, ya que no puede haber logs futuros).
-  async findMyToday(userId: string, department?: ActivityDepartment, role?: string, date?: string) {
+  async findMyToday(userId: string, department?: ActivityDepartment, roles?: string[], date?: string) {
 
-    if (department === ActivityDepartment.INGENIERIA && role) {
-      this.assertEngineeringAccess(role)
+    if (department === ActivityDepartment.INGENIERIA && roles) {
+      this.assertEngineeringAccess(roles)
     }
 
     // Mediodía UTC del día pedido: evita que el parseo de la fecha
@@ -539,10 +539,10 @@ export class ActivityLogService {
   // Filtro simple por ahora (usuario + rango de fechas); una pantalla
   // de reportes más completa puede construirse sobre este mismo
   // endpoint más adelante.
-  async findAll(filters: { userId?: string; projectId?: string; taskId?: string; from?: Date; to?: Date; department?: ActivityDepartment; role?: string }) {
+  async findAll(filters: { userId?: string; projectId?: string; taskId?: string; from?: Date; to?: Date; department?: ActivityDepartment; roles?: string[] }) {
 
-    if (filters.department === ActivityDepartment.INGENIERIA && filters.role) {
-      this.assertEngineeringAccess(filters.role)
+    if (filters.department === ActivityDepartment.INGENIERIA && filters.roles) {
+      this.assertEngineeringAccess(filters.roles)
     }
 
     return this.prisma.activityLog.findMany({

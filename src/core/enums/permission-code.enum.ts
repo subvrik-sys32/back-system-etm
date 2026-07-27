@@ -21,6 +21,12 @@ export enum PermissionCode {
   USER_CREATE = "USER_CREATE",
   USER_UPDATE = "USER_UPDATE",
   USER_DELETE = "USER_DELETE",
+  // Otorgar/revocar permisos puntuales (ALLOW/DENY) por encima de
+  // los roles de un usuario — separado de USER_UPDATE a propósito:
+  // editar el perfil de alguien (nombre, área, etc.) es mucho menos
+  // sensible que darle/sacarle un permiso puntual que sus roles no
+  // reflejan.
+  USER_PERMISSION_OVERRIDE_MANAGE = "USER_PERMISSION_OVERRIDE_MANAGE",
 
   COMMENT_READ = "COMMENT_READ",
   COMMENT_CREATE = "COMMENT_CREATE",

@@ -53,7 +53,7 @@ export class ActivityLogController {
     return this.activityLogService.findAllTypes(
       includeInactive === "1",
       department,
-      user?.role,
+      user?.roles,
     )
   }
 
@@ -86,7 +86,7 @@ export class ActivityLogController {
     @Body() dto: CreateActivityLogDto,
     @CurrentUser() user: CurrentUserType,
   ) {
-    return this.activityLogService.create(user.id, dto, user.role)
+    return this.activityLogService.create(user.id, dto, user.roles)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_READ)
@@ -96,7 +96,7 @@ export class ActivityLogController {
     @Query("department") department?: ActivityDepartment,
     @Query("date") date?: string,
   ) {
-    return this.activityLogService.findMyToday(user.id, department, user.role, date)
+    return this.activityLogService.findMyToday(user.id, department, user.roles, date)
   }
 
   @Permissions(PermissionCode.ACTIVITY_LOG_CREATE)
@@ -136,7 +136,7 @@ export class ActivityLogController {
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
       department,
-      role: user.role,
+      roles: user.roles,
     })
   }
 

@@ -1,4 +1,5 @@
 import {
+  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -27,8 +28,14 @@ export class CreateUserDto {
   @MinLength(8)
   password!: string
 
-  @IsUUID()
-  roleId!: string
+  // Al menos un rol siempre — no tiene sentido un usuario sin
+  // ningún rol asignado (a diferencia de areaIds, que sí puede
+  // quedar vacío). Mismo patrón de validación que areaIds.
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  roleIds!: string[]
 
   @IsOptional()
   @IsEnum(JobLevel)

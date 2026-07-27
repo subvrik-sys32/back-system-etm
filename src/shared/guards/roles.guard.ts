@@ -47,8 +47,11 @@ export class RolesGuard
         .switchToHttp()
         .getRequest()
 
-    return roles.includes(
-      request.user.role,
+    const userRoles: string[] =
+      request.user?.roles ?? []
+
+    return roles.some(
+      role => userRoles.includes(role),
     )
 
   }

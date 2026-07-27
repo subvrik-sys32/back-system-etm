@@ -25,7 +25,7 @@ export interface PublishOptions<T = unknown> {
 export interface RealtimeConnectionInfo {
   connectionId: string;
   userId: string;
-  role?: string;
+  roles?: string[];
   userAgent?: string;
   connectedAt: Date;
 }
