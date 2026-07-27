@@ -1,4 +1,6 @@
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -36,12 +38,14 @@ export class UpdateUserDto {
   @IsEnum(JobLevel)
   level?: JobLevel
 
-  // null explícito para poder limpiarlo (mismo criterio que level
-  // arriba) — @IsOptional() de class-validator ya deja pasar null
-  // sin validarlo como UUID.
+  // Array vacío = "limpiar todas las áreas", undefined = "no
+  // tocar" (mismo criterio que level arriba) — antes era un solo
+  // areaId (nullable), ahora puede pertenecer a varias a la vez.
   @IsOptional()
-  @IsUUID()
-  areaId?: string | null
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  areaIds?: string[]
 
   @IsOptional()
   @IsString()

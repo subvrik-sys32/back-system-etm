@@ -85,7 +85,6 @@ model User {
   passwordHash           String
   roleId                 String
   level                  JobLevel       @default(GENERAL)
-  areaId                 String?
   active                 Boolean        @default(true)
   deletedAt              DateTime?
   createdAt              DateTime       @default(now())
@@ -103,7 +102,13 @@ model User {
   createdTasks           Task[]         @relation("TaskCreatedBy")
   updatedTasks           Task[]         @relation("TaskUpdatedBy")
   role                   Role           @relation(fields: [roleId], references: [id])
-  area                   Area?          @relation(fields: [areaId], references: [id])
+  // Muchos a muchos — antes un OPERARIO tenía un solo área fija
+  // (areaId). Ahora puede pertenecer a varias (ej. alguien que
+  // rota entre Ingeniería y Producción). Relación m2m implícita de
+  // Prisma: no hace falta tabla intermedia a mano, ni @relation acá
+  // ni del lado de Area — con declarar Area[]/User[] en los dos
+  // lados alcanza.
+  areas                  Area[]
   workflowSteps          WorkflowStep[]
   workflowStepsAssigned  WorkflowStep[] @relation("WorkflowStepAssignedBy")
   workflowStepsInvited   WorkflowStep[] @relation("WorkflowStepInvitedOperator")

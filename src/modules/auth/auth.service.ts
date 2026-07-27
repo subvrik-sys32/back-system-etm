@@ -47,7 +47,7 @@ export class AuthService {
               },
             },
           },
-          area: true,
+          areas: true,
         },
       })
 
@@ -92,7 +92,7 @@ export class AuthService {
               },
             },
           },
-          area: true,
+          areas: true,
         },
       })
 
@@ -130,12 +130,12 @@ export class AuthService {
           permission: { code: string }
         }[]
       }
-      area: {
+      areas: {
         id: string
         code: string
         label: string
         processCode: string | null
-      } | null
+      }[]
     },
   ): Promise<LoginResponseDto> {
 
@@ -177,14 +177,13 @@ export class AuthService {
           color: user.color,
           active: user.role.active,
         },
-        area: user.area
-          ? {
-              id: user.area.id,
-              code: user.area.code,
-              label: user.area.label,
-              processCode: user.area.processCode,
-            }
-          : null,
+        // Array ahora (m2m) — antes un solo area nullable.
+        areas: user.areas.map(area => ({
+          id: area.id,
+          code: area.code,
+          label: area.label,
+          processCode: area.processCode,
+        })),
       },
     }
 
@@ -209,7 +208,7 @@ export class AuthService {
               },
             },
           },
-          area: true,
+          areas: true,
         },
         omit: {
           passwordHash: true,
@@ -250,14 +249,13 @@ export class AuthService {
           color: user.role.color,
           active: user.role.active,
         },
-        area: user.area
-          ? {
-              id: user.area.id,
-              code: user.area.code,
-              label: user.area.label,
-              processCode: user.area.processCode,
-            }
-          : null,
+        // Array ahora (m2m) — antes un solo area nullable.
+        areas: user.areas.map(area => ({
+          id: area.id,
+          code: area.code,
+          label: area.label,
+          processCode: area.processCode,
+        })),
       },
     }
 

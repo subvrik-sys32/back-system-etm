@@ -31,7 +31,7 @@ export class UsersService {
 
     const users = await this.prisma.user.findMany({
       where: { deletedAt: null },
-      include: { role: true, area: true },
+      include: { role: true, areas: true },
       omit: { passwordHash: true },
       orderBy: { createdAt: "asc" },
     })
@@ -46,7 +46,7 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
-      include: { role: true, area: true },
+      include: { role: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -68,7 +68,7 @@ export class UsersService {
       : dto.level
 
     await this.assertLevelMatchesRole(dto.roleId, targetLevel)
-    this.assertAreaMatchesLevel(dto.areaId, targetLevel)
+    this.assertAreasMatchLevel(dto.areaIds, targetLevel)
 
     const passwordHash = await bcrypt.hash(dto.password, 10)
 
@@ -80,16 +80,21 @@ export class UsersService {
         passwordHash,
         roleId: dto.roleId,
         level: targetLevel,
-        // Solo un OPERARIO puede tener área fija — si por lo que
-        // sea llegara un areaId con otro level (no debería, ya lo
-        // valida assertAreaMatchesLevel arriba), igual no se
-        // persiste.
-        areaId: targetLevel === JobLevel.OPERARIO ? dto.areaId : null,
+        // Solo un OPERARIO puede tener áreas fijas — si por lo que
+        // sea llegaran areaIds con otro level (no debería, ya lo
+        // valida assertAreasMatchLevel arriba), igual no se
+        // persisten.
+        areas: {
+          connect:
+            targetLevel === JobLevel.OPERARIO && dto.areaIds
+              ? dto.areaIds.map(id => ({ id }))
+              : [],
+        },
         icon: dto.icon,
         color: dto.color,
         active: dto.active ?? true,
       },
-      include: { role: true, area: true },
+      include: { role: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -162,20 +167,21 @@ export class UsersService {
       await this.assertLevelMatchesRole(effectiveRoleId, levelToUpdate)
     }
 
-    // 4. Resolver 'areaId' — mismo criterio que 'level' arriba:
-    // null explícito limpia, undefined no toca. Si el nivel
-    // EFECTIVO tras este update deja de ser OPERARIO, se fuerza a
-    // null sin importar lo que haya venido en el DTO (un
-    // Supervisor/General no tiene área fija — la elige él mismo
-    // desde el panel, no queda pegada a su Perfil).
+    // 4. Resolver 'areas' — mismo criterio que 'level' arriba:
+    // undefined no toca nada, un array (aunque sea vacío) reemplaza
+    // el conjunto completo. Si el nivel EFECTIVO tras este update
+    // deja de ser OPERARIO, se fuerza a vacío sin importar lo que
+    // haya venido en el DTO (un Supervisor/General no tiene área
+    // fija — la elige él mismo desde el panel, no queda pegada a su
+    // Perfil).
     const effectiveLevel = levelToUpdate ?? existing.level
 
-    let areaIdToUpdate: string | null | undefined
+    let areasUpdate: { set: { id: string }[] } | undefined
 
     if (effectiveLevel !== JobLevel.OPERARIO) {
-      areaIdToUpdate = null
-    } else if (dto.areaId !== undefined) {
-      areaIdToUpdate = dto.areaId
+      areasUpdate = { set: [] }
+    } else if (dto.areaIds !== undefined) {
+      areasUpdate = { set: dto.areaIds.map(id => ({ id })) }
     }
 
     let passwordHash: string | undefined
@@ -192,13 +198,13 @@ export class UsersService {
         email: dto.email,
         roleId: dto.roleId,
         level: levelToUpdate, // Jamás será null
-        areaId: areaIdToUpdate,
+        areas: areasUpdate,
         icon: dto.icon,
         color: dto.color,
         active: dto.active,
         passwordHash,
       },
-      include: { role: true, area: true },
+      include: { role: true, areas: true },
       omit: { passwordHash: true },
     })
 
@@ -330,22 +336,22 @@ export class UsersService {
 
   }
 
-  // El Área (Perfil) solo tiene sentido para un Operario — un
+  // Las Áreas (Perfil) solo tienen sentido para un Operario — un
   // Supervisor elige qué área(s) supervisar desde el panel lateral
   // (preferencia de UI, no queda pegada a su Perfil), y General/
   // otros roles no tienen ningún concepto de área.
-  private assertAreaMatchesLevel(
-    areaId: string | null | undefined,
+  private assertAreasMatchLevel(
+    areaIds: string[] | undefined,
     level: JobLevel,
   ) {
 
-    if (!areaId) {
+    if (!areaIds || areaIds.length === 0) {
       return
     }
 
     if (level !== JobLevel.OPERARIO) {
       throw new BadRequestException(
-        "El área solo aplica para usuarios con sub-nivel OPERARIO",
+        "Las áreas solo aplican para usuarios con sub-nivel OPERARIO",
       )
     }
 
@@ -431,8 +437,9 @@ export class UsersService {
         // Faltaba por completo — sin esto, useAreaOperators
         // (Convocar en TaskAreaPanel) nunca podía filtrar por área
         // porque user.area?.processCode siempre venía undefined
-        // para TODOS, en TODAS las áreas.
-        area: {
+        // para TODOS, en TODAS las áreas. Ahora es un array (m2m):
+        // un operario puede aparecer en más de un área a la vez.
+        areas: {
           select: { id: true, code: true, label: true, processCode: true },
         },
       },

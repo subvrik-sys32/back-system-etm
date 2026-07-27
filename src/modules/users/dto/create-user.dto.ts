@@ -1,4 +1,6 @@
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -32,12 +34,14 @@ export class CreateUserDto {
   @IsEnum(JobLevel)
   level?: JobLevel
 
-  // null explícito para el caso "OPERARIO pero todavía sin área
-  // elegida" — @IsOptional() de class-validator ya deja pasar null
-  // sin validarlo como UUID.
+  // Array vacío/ausente = "OPERARIO pero todavía sin ningún área
+  // elegida" — antes era un solo areaId (nullable), ahora puede
+  // pertenecer a varias a la vez.
   @IsOptional()
-  @IsUUID()
-  areaId?: string | null
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  areaIds?: string[]
 
   @IsString()
   icon!: string

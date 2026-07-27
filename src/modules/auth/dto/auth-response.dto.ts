@@ -29,7 +29,7 @@ export class AuthUserDto {
   phone!: string | null
   position!: string | null
   role!: AuthRoleDto
-  area!: AuthAreaDto | null
+  areas!: AuthAreaDto[]
 }
 
 export class LoginResponseDto {
