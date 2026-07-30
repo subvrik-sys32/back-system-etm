@@ -4,8 +4,9 @@ import { ActivityDepartment, DayShift } from "@prisma/client"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
-import { PermissionCode } from "@/core/enums/permission-code.enum"
+import { RoleCode } from "@/core/enums/role-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
+import { BITACORA_DEPARTMENT_ROLES } from "./constants/bitacora-department-roles"
 
 import { CreateActivityLogDto } from "./dto/create-activity-log.dto"
 import { UpdateActivityLogDto } from "./dto/update-activity-log.dto"
@@ -76,16 +77,27 @@ export class ActivityLogService {
 
   // ---- Tipos de actividad ----
 
-  // La Bitácora de Ingeniería es solo para ese equipo — a
-  // diferencia del resto de la bitácora (compartida por cualquiera
-  // con el permiso), acá el permiso no alcanza: se valida también
-  // el rol. ADMIN pasa siempre (mismo criterio que el resto del
-  // sistema: ve todo).
-  private assertEngineeringAccess(roles: string[]) {
+  // Algunas bitácoras departamentales son solo para ciertos roles —
+  // a diferencia del resto (compartida por cualquiera con el
+  // permiso general), acá el permiso no alcanza: se valida también
+  // el rol contra BITACORA_DEPARTMENT_ROLES. Sin entrada ahí para
+  // ese departamento, queda abierto a cualquiera con el permiso
+  // (caso de Producción hoy). ADMIN pasa siempre.
+  private assertDepartmentAccess(department: ActivityDepartment, roles: string[]) {
 
-    if (!roles.includes("ADMIN") && !roles.includes("INGENIERIA")) {
+    const allowedRoles = BITACORA_DEPARTMENT_ROLES[department]
+
+    if (!allowedRoles) {
+      return
+    }
+
+    if (roles.includes(RoleCode.ADMIN)) {
+      return
+    }
+
+    if (!allowedRoles.some(role => roles.includes(role))) {
       throw new ForbiddenException(
-        "La Bitácora de Ingeniería es solo para ese equipo.",
+        `No tenés acceso a la bitácora de ${department.toLowerCase()}.`,
       )
     }
 
@@ -93,8 +105,8 @@ export class ActivityLogService {
 
   findAllTypes(includeInactive = false, department?: ActivityDepartment, roles?: string[]) {
 
-    if (department === ActivityDepartment.INGENIERIA && roles) {
-      this.assertEngineeringAccess(roles)
+    if (department && roles) {
+      this.assertDepartmentAccess(department, roles)
     }
 
     return this.prisma.activityType.findMany({
@@ -180,9 +192,7 @@ export class ActivityLogService {
       throw new NotFoundException("Tipo de actividad no encontrado")
     }
 
-    if (type.department === ActivityDepartment.INGENIERIA) {
-      this.assertEngineeringAccess(roles)
-    }
+    this.assertDepartmentAccess(type.department, roles)
 
     // Si viene taskId, se valida que la tarea exista y (si también
     // vino projectId) que realmente pertenezca a ese proyecto — evita
@@ -495,8 +505,8 @@ export class ActivityLogService {
   // igual que antes (sin tope, ya que no puede haber logs futuros).
   async findMyToday(userId: string, department?: ActivityDepartment, roles?: string[], date?: string) {
 
-    if (department === ActivityDepartment.INGENIERIA && roles) {
-      this.assertEngineeringAccess(roles)
+    if (department && roles) {
+      this.assertDepartmentAccess(department, roles)
     }
 
     // Mediodía UTC del día pedido: evita que el parseo de la fecha
@@ -541,8 +551,8 @@ export class ActivityLogService {
   // endpoint más adelante.
   async findAll(filters: { userId?: string; projectId?: string; taskId?: string; from?: Date; to?: Date; department?: ActivityDepartment; roles?: string[] }) {
 
-    if (filters.department === ActivityDepartment.INGENIERIA && filters.roles) {
-      this.assertEngineeringAccess(filters.roles)
+    if (filters.department && filters.roles) {
+      this.assertDepartmentAccess(filters.department, filters.roles)
     }
 
     return this.prisma.activityLog.findMany({
