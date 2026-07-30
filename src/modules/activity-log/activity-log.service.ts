@@ -580,7 +580,7 @@ export class ActivityLogService {
           select: { id: true, taskNumber: true, reference: true },
         },
       },
-      orderBy: { loggedAt: "desc" },
+      orderBy: { loggedAt: "asc" },
     })
 
   }
