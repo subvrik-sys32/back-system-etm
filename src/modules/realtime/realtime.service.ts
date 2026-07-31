@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import { randomUUID } from 'crypto';
 import { Subject, Subscription, interval } from 'rxjs';
+import { PrismaService } from '@/infra/database/prisma/prisma.service';
 import {
   PublishOptions,
   RealtimeConnectionInfo,
@@ -28,6 +29,8 @@ export class RealtimeService {
 
   // Connection Hub: userId -> connectionId -> conexión
   private readonly connections = new Map<string, Map<string, InternalConnection>>();
+
+  constructor(private readonly prisma: PrismaService) {}
 
   connect(
     userId: string,
@@ -137,6 +140,21 @@ export class RealtimeService {
     // Presencia: solo emitir online:false si ya no quedan conexiones
     if (isLastConnection) {
       this.emitPresence(userId, false);
+
+      // No bloqueante a propósito — si esto tarda o falla, no debe
+      // demorar ni romper el cierre de la conexión SSE en sí. Un
+      // fallo acá solo significa que "última vez visto" queda
+      // desactualizado, no es crítico.
+      this.prisma.user
+        .update({
+          where: { id: userId },
+          data: { lastSeenAt: new Date() },
+        })
+        .catch(err => {
+          this.logger.warn(
+            `No se pudo actualizar lastSeenAt de ${userId}: ${(err as Error).message}`,
+          );
+        });
     }
   }
 

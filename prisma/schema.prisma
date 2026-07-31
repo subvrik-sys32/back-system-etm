@@ -98,6 +98,14 @@ model User {
   avatarUrl              String?
   phone                  String?
   position               String?
+  // "online" en sí sigue sin persistirse — se calcula en vivo desde
+  // las conexiones SSE activas (ver RealtimeService.isUserOnline).
+  // Esto es distinto: CUÁNDO fue la última vez que se desconectó
+  // del todo (todas sus pestañas/conexiones cerradas), para poder
+  // mostrar "visto por última vez hace X" cuando ya no está online.
+  // Se actualiza en RealtimeService.disconnect() al perder la
+  // última conexión activa.
+  lastSeenAt             DateTime?
   auditLogs              AuditLog[]
   createdProjects        Project[]      @relation("ProjectCreatedBy")
   managedProjects        Project[]      @relation("ProjectPm")

@@ -582,6 +582,9 @@ export class UsersService {
         level: true,
         color: true,
         icon: true,
+        // Para mostrar "visto por última vez hace X" cuando no
+        // está online (ver el panel de Activos del sidebar).
+        lastSeenAt: true,
         // Array ahora (m2m) — antes un solo role obligatorio por FK.
         roles: {
           select: { code: true },
