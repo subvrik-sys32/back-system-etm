@@ -19,6 +19,8 @@ export async function getStepForUpdate(
 
         status:true,
 
+        operatorId:true,
+
       },
 
     })

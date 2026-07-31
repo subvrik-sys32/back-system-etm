@@ -192,6 +192,29 @@ export class WorkflowService {
       },
     )
 
+    // Antes solo "Convocar" (summon) avisaba al operario asignado —
+    // este PATCH directo (ProcessOperatorCell, el selector inline
+    // al lado de la tarea) asigna igual pero nunca notificaba a
+    // nadie. Solo cuando de verdad cambia a un operario DISTINTO
+    // (no un re-guardado del mismo, no un vaciado a null).
+    if (
+      dto.operatorId &&
+      dto.operatorId !== step.operatorId
+    ) {
+
+      await this.notifications.notifyTaskAssignment({
+        operatorId: dto.operatorId,
+        actorId: userId,
+        taskId: step.taskId,
+        workflowStepId: step.id,
+        type: "TASK_ASSIGNED",
+        messageSnippet: "Te asignaron una tarea",
+      }).catch(() => {
+        // no crítico, mismo criterio que en summon()
+      })
+
+    }
+
     return this.publishDelta(
       result,
       userId,
