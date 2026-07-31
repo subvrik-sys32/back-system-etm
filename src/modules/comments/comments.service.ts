@@ -257,18 +257,26 @@ export class CommentsService{
 
     await this.commentRepository.softDelete(id)
 
-    // Igual que arriba: esto es un efecto secundario de limpieza, no
-    // necesita bloquear la respuesta de borrado.
-    this.notificationsService
-      .deleteByCommentId(id)
-      .catch(error => {
+    // deleteByCommentId ahora reintenta solo (ver
+    // notifications.service.ts) — la esperamos acá para que, si las
+    // reintentadas también fallan, quede un error claro en los logs
+    // CON el id del comentario, en vez de perderse en un .catch()
+    // que nunca bloqueaba nada. Si sigue fallando después de los
+    // reintentos, igual dejamos que el borrado del comentario
+    // termine bien: el cleanup script (cleanup-orphaned-notifications.ts)
+    // sirve de red de contención para estos casos.
+    try{
 
-        this.logger.error(
-          `Fallo al limpiar notificaciones del comentario ${id}`,
-          error instanceof Error ? error.stack : error,
-        )
+      await this.notificationsService.deleteByCommentId(id)
 
-      })
+    }catch(error){
+
+      this.logger.error(
+        `Fallo al limpiar notificaciones del comentario ${id} tras reintentos — quedarán huérfanas hasta el próximo cleanup`,
+        error instanceof Error ? error.stack : error,
+      )
+
+    }
 
     this.realtime.publish({
       entity:"COMMENT",

@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger } from "@nestjs/common"
 import { NotificationRepository } from "./repositories/notification.repository"
 import { NotificationWithRelations } from "./entities/notification.entity"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
@@ -11,8 +11,24 @@ type CommentContext=
 
 const DEFAULT_PAGE_SIZE=20
 
+// deleteByCommentId corre casi siempre bien, pero si falla (timeout
+// de DB, pool agotado, blip de red) y nadie reintenta, la
+// notificación queda huérfana mostrando el texto del comentario ya
+// borrado PARA SIEMPRE — nadie se entera salvo revisando logs del
+// server. 3 intentos con backoff corto cubre la enorme mayoría de
+// fallas transitorias sin agregar demora perceptible al borrado de
+// un comentario.
+const DELETE_BY_COMMENT_MAX_ATTEMPTS=3
+const DELETE_BY_COMMENT_BACKOFF_MS=200
+
+function sleep(ms:number){
+  return new Promise(resolve=>setTimeout(resolve,ms))
+}
+
 @Injectable()
 export class NotificationsService{
+
+  private readonly logger=new Logger(NotificationsService.name)
 
   constructor(
     private readonly notificationRepository:NotificationRepository,
@@ -209,12 +225,45 @@ export class NotificationsService{
 
   async deleteByCommentId(commentId:string){
 
-    const notifications=await this.notificationRepository.findManyByComment(commentId)
-    if(notifications.length===0)return
+    let notifications
+    let lastError:unknown
 
-    await this.notificationRepository.deleteByCommentId(commentId)
+    for(let attempt=1;attempt<=DELETE_BY_COMMENT_MAX_ATTEMPTS;attempt++){
 
-    for(const notification of notifications){
+      try{
+
+        notifications=await this.notificationRepository.findManyByComment(commentId)
+        if(notifications.length===0)return
+
+        await this.notificationRepository.deleteByCommentId(commentId)
+        lastError=undefined
+        break
+
+      }catch(error){
+
+        lastError=error
+
+        if(attempt<DELETE_BY_COMMENT_MAX_ATTEMPTS){
+          this.logger.warn(
+            `deleteByCommentId falló (intento ${attempt}/${DELETE_BY_COMMENT_MAX_ATTEMPTS}) para comentario ${commentId}, reintentando…`,
+            error instanceof Error?error.stack:error,
+          )
+          await sleep(DELETE_BY_COMMENT_BACKOFF_MS*attempt)
+        }
+
+      }
+
+    }
+
+    if(lastError){
+      // Se agotaron los reintentos: esto SÍ necesita ser visible más
+      // allá de un log — el caller (comments.service.ts) lo espera
+      // (await) y decide qué hacer (hoy: loguear como error propio;
+      // mañana, opcionalmente, encolar para un reintento diferido).
+      throw lastError
+    }
+
+    for(const notification of notifications??[]){
       this.realtime.publishToUser(notification.userId,{
         entity:"NOTIFICATION",
         action:"DELETED",
