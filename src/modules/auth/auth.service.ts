@@ -99,7 +99,7 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException(
-        "Invalid credentials",
+        "Credenciales inválidas",
       )
     }
 
@@ -111,7 +111,7 @@ export class AuthService {
 
     if (!valid) {
       throw new UnauthorizedException(
-        "Invalid credentials",
+        "Credenciales inválidas",
       )
     }
 
