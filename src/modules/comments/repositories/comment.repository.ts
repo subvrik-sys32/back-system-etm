@@ -82,4 +82,23 @@ export class CommentRepository{
     })
   }
 
+
+  countByTaskId(taskId: string) {
+    return this.prisma.comment.count({
+      where: { taskId, deletedAt: null },
+    })
+  }
+
+  countByProjectId(projectId: string) {
+    return this.prisma.comment.count({
+      where: { projectId, deletedAt: null },
+    })
+  }
+
+  countByWorkflowStepId(workflowStepId: string) {
+    return this.prisma.comment.count({
+      where: { workflowStepId, deletedAt: null },
+    })
+  }
+
 }

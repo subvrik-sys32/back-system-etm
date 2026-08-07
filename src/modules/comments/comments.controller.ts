@@ -35,6 +35,13 @@ export class CommentsController {
     return this.commentsService.findAllByTask(taskId)
   }
 
+  /** Solo el número — para badges. No trae mensajes. */
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("tasks/:taskId/comments/count")
+  countByTask(@Param("taskId") taskId: string) {
+    return this.commentsService.countByTask(taskId).then((count) => ({ count }))
+  }
+
   @Permissions(PermissionCode.COMMENT_CREATE)
   @Post("tasks/:taskId/comments")
   createForTask(
@@ -52,6 +59,14 @@ export class CommentsController {
     return this.commentsService.findAllByWorkflowStep(workflowStepId)
   }
 
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("workflow-steps/:workflowStepId/comments/count")
+  countByWorkflowStep(@Param("workflowStepId") workflowStepId: string) {
+    return this.commentsService
+      .countByWorkflowStep(workflowStepId)
+      .then((count) => ({ count }))
+  }
+
   @Permissions(PermissionCode.COMMENT_CREATE)
   @Post("workflow-steps/:workflowStepId/comments")
   createForWorkflowStep(
@@ -67,6 +82,12 @@ export class CommentsController {
   @Get("projects/:projectId/comments")
   findAllByProject(@Param("projectId") projectId:string){
     return this.commentsService.findAllByProject(projectId)
+  }
+
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("projects/:projectId/comments/count")
+  countByProject(@Param("projectId") projectId: string) {
+    return this.commentsService.countByProject(projectId).then((count) => ({ count }))
   }
 
   @Permissions(PermissionCode.COMMENT_CREATE)

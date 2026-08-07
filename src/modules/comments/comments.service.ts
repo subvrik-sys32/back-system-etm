@@ -236,6 +236,19 @@ export class CommentsService{
     return comment
   }
 
+
+  countByTask(taskId: string) {
+    return this.commentRepository.countByTaskId(taskId)
+  }
+
+  countByProject(projectId: string) {
+    return this.commentRepository.countByProjectId(projectId)
+  }
+
+  countByWorkflowStep(workflowStepId: string) {
+    return this.commentRepository.countByWorkflowStepId(workflowStepId)
+  }
+
   markAsRead(
     target:{ scope:"task"; taskId:string } | { scope:"workflowStep"; workflowStepId:string } | { scope:"project"; projectId:string },
     userId:string,

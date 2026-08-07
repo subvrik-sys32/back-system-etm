@@ -34,14 +34,36 @@ export class ProjectsService{
     },
     stage:true,
     status:true,
+    // Conteo de comentarios activos (no soft-deleted) para badges
+    // del listado. Una sola query agregada — NO trae los mensajes.
+    _count:{
+      select:{
+        comments:{
+          where:{ deletedAt:null },
+        },
+      },
+    },
+  }
+
+
+  /** Aplana `_count.comments` → `commentCount` (API estable para el front). */
+  private withCommentCount<T extends { _count?: { comments: number } }>(
+    row: NonNullable<T>,
+  ): Omit<NonNullable<T>, "_count"> & { commentCount: number } {
+    const { _count, ...rest } = row
+    return {
+      ...(rest as Omit<NonNullable<T>, "_count">),
+      commentCount: _count?.comments ?? 0,
+    }
   }
 
   async findAll(){
-    return this.prisma.project.findMany({
+    const rows = await this.prisma.project.findMany({
       where:{ deletedAt:null },
       include:this.includeRelations,
       orderBy:{ position:"asc" },
     })
+    return rows.map((row) => this.withCommentCount(row))
   }
 
   async findOne(id:string){
@@ -55,7 +77,8 @@ export class ProjectsService{
       throw new NotFoundException("Project not found")
     }
 
-    return project
+    const found = project
+    return this.withCommentCount(found)
   }
 
   async create(dto:CreateProjectDto,userId:string){
@@ -106,7 +129,7 @@ export class ProjectsService{
       excludeUserId:userId,
     })
 
-    return project
+    return this.withCommentCount(project as NonNullable<typeof project>)
   }
 
   async update(id:string,dto:UpdateProjectDto,userId:string){
@@ -147,7 +170,7 @@ export class ProjectsService{
       })
     }
 
-    return project
+    return this.withCommentCount(project as NonNullable<typeof project>)
   }
 
   async reorder(items:ReorderProjectItemDto[],userId:string){

@@ -44,13 +44,50 @@ export class TasksService{
             icon:true,
           },
         },
+        _count:{
+          select:{
+            comments:{
+              where:{ deletedAt:null },
+            },
+          },
+        },
       },
       orderBy:{ order:"asc" as const },
     },
+    _count:{
+      select:{
+        comments:{
+          where:{ deletedAt:null },
+        },
+      },
+    },
   } satisfies Prisma.TaskInclude
 
+
+  private withCommentCount<T extends {
+    _count?: { comments: number }
+    workflowSteps?: Array<{ _count?: { comments: number } } & Record<string, unknown>>
+  }>(row: NonNullable<T>): Omit<NonNullable<T>, "_count"> & { commentCount: number } {
+    const { _count, workflowSteps, ...rest } = row as NonNullable<T> & {
+      _count?: { comments: number }
+      workflowSteps?: Array<{ _count?: { comments: number } } & Record<string, unknown>>
+    }
+    const steps = workflowSteps?.map((step) => {
+      const { _count: stepCount, ...stepRest } = step
+      return {
+        ...stepRest,
+        commentCount: stepCount?.comments ?? 0,
+      }
+    })
+    return {
+      ...(rest as Omit<T, "_count" | "workflowSteps">),
+      ...(steps ? { workflowSteps: steps } : {}),
+      commentCount: _count?.comments ?? 0,
+    } as Omit<T, "_count"> & { commentCount: number }
+  }
+
   async findAll(){
-    return this.prisma.task.findMany({
+    const rows = await this.prisma.task.findMany({
       where:{
         deletedAt:null,
         project:{ deletedAt:null },
@@ -58,6 +95,7 @@ export class TasksService{
       include:this.includeRelations,
       orderBy:{ position:"asc" },
     })
+    return rows.map((row) => this.withCommentCount(row))
   }
 
   async findOne(id:string){
@@ -75,7 +113,8 @@ export class TasksService{
       throw new NotFoundException("Task not found")
     }
 
-    return task
+    const found = task
+    return this.withCommentCount(found)
   }
 
   async create(
