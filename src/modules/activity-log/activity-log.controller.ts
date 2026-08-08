@@ -99,6 +99,44 @@ export class ActivityLogController {
     return this.activityLogService.findMyToday(user.id, department, user.roles, date)
   }
 
+  // Días con registros del usuario autenticado (calendario bitácora personal).
+  // userId siempre del token — no se acepta userId por query.
+  @Permissions(PermissionCode.ACTIVITY_LOG_READ)
+  @Get("activity-log/me/marked-dates")
+  findMyMarkedDates(
+    @CurrentUser() user: CurrentUserType,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Query("department") department?: ActivityDepartment,
+  ) {
+    return this.activityLogService.findMyMarkedDates(
+      user.id,
+      from,
+      to,
+      department,
+      user.roles,
+    )
+  }
+
+  // Días con registros para supervisión / bitácora de equipo.
+  @Permissions(PermissionCode.ACTIVITY_LOG_READ_ANY)
+  @Get("activity-log/marked-dates")
+  findMarkedDates(
+    @CurrentUser() user: CurrentUserType,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Query("userId") userId?: string,
+    @Query("department") department?: ActivityDepartment,
+  ) {
+    return this.activityLogService.findMarkedDates({
+      from,
+      to,
+      userId,
+      department,
+      roles: user.roles,
+    })
+  }
+
   @Permissions(PermissionCode.ACTIVITY_LOG_CREATE)
   @Patch("activity-log/:id")
   update(

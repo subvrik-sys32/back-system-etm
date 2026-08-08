@@ -545,6 +545,103 @@ export class ActivityLogService {
 
   }
 
+  /**
+   * Días (YYYY-MM-DD en Lima) en los que el usuario autenticado tiene
+   * al menos un registro en el rango [from, to].
+   * userId siempre del token — no se acepta userId del cliente.
+   * Payload liviano: solo fechas, no los logs completos.
+   */
+  async findMyMarkedDates(
+    userId: string,
+    from: string,
+    to: string,
+    department?: ActivityDepartment,
+    roles?: string[],
+  ): Promise<string[]> {
+
+    if (department && roles) {
+      this.assertDepartmentAccess(department, roles)
+    }
+
+    const start = getStartOfTodayInLima(new Date(`${from}T12:00:00.000Z`))
+    const end = getEndOfDayInLima(new Date(`${to}T12:00:00.000Z`))
+
+    const rows = await this.prisma.activityLog.findMany({
+      where: {
+        userId,
+        loggedAt: {
+          gte: start,
+          lt: end,
+        },
+        ...(department ? { activityType: { department } } : {}),
+      },
+      select: { loggedAt: true },
+    })
+
+    return this.toUniqueLimaDateKeys(rows.map(r => r.loggedAt))
+
+  }
+
+  /**
+   * Días con registros para supervisión (READ_ANY).
+   * userId opcional: sin él = todo el equipo en el rango.
+   */
+  async findMarkedDates(filters: {
+    userId?: string
+    from: string
+    to: string
+    department?: ActivityDepartment
+    roles?: string[]
+  }): Promise<string[]> {
+
+    if (filters.department && filters.roles) {
+      this.assertDepartmentAccess(filters.department, filters.roles)
+    }
+
+    const start = getStartOfTodayInLima(new Date(`${filters.from}T12:00:00.000Z`))
+    const end = getEndOfDayInLima(new Date(`${filters.to}T12:00:00.000Z`))
+
+    const rows = await this.prisma.activityLog.findMany({
+      where: {
+        ...(filters.userId ? { userId: filters.userId } : {}),
+        loggedAt: {
+          gte: start,
+          lt: end,
+        },
+        ...(filters.department
+          ? { activityType: { department: filters.department } }
+          : {}),
+      },
+      select: { loggedAt: true },
+    })
+
+    return this.toUniqueLimaDateKeys(rows.map(r => r.loggedAt))
+
+  }
+
+  /** loggedAt → set de "YYYY-MM-DD" en America/Lima */
+  private toUniqueLimaDateKeys(dates: Date[]): string[] {
+
+    const keys = new Set<string>()
+
+    for (const date of dates) {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Lima",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(date)
+
+      const y = parts.find(p => p.type === "year")!.value
+      const m = parts.find(p => p.type === "month")!.value
+      const d = parts.find(p => p.type === "day")!.value
+      keys.add(`${y}-${m}-${d}`)
+    }
+
+    return [...keys]
+
+  }
+
   // Para supervisión/reportes — cualquiera con ACTIVITY_LOG_READ_ANY.
   // Filtro simple por ahora (usuario + rango de fechas); una pantalla
   // de reportes más completa puede construirse sobre este mismo
