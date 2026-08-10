@@ -1,15 +1,29 @@
-import { IsEnum } from "class-validator"
+import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
 import { DayShift } from "@prisma/client"
 
-// Único campo editable por ahora: la franja (shift). Es lo que
-// habilita "arrastrar una actividad mal posicionada a otra franja
-// disponible" — no se permite tocar activityType/project/task/note
-// desde acá, eso sigue siendo "borrar y volver a crear" a propósito
-// (evita reabrir la superficie de edición completa por un caso de
-// uso que solo necesita mover el slot).
+// Campos opcionales: mover franja y/o editar contenido.
+// AUTO no se edita desde el service (Forbidden).
 export class UpdateActivityLogDto {
 
+  @IsOptional()
   @IsEnum(DayShift)
-  shift!: DayShift
+  shift?: DayShift
+
+  @IsOptional()
+  @IsString()
+  activityTypeId?: string
+
+  @IsOptional()
+  @IsString()
+  projectId?: string
+
+  @IsOptional()
+  @IsString()
+  taskId?: string | null
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string | null
 
 }
