@@ -78,6 +78,18 @@ export class ActivityLogController {
     return this.activityLogService.removeType(id)
   }
 
+
+  // ---- Franjas (estado Lima) ----
+
+  // Fuente de verdad para candados de UI. El front refetcha en
+  // nextBoundaryAt; no calcula upcoming/current/past con el reloj
+  // del browser (TZ distinta a America/Lima).
+  @Permissions(PermissionCode.ACTIVITY_LOG_READ)
+  @Get("activity-log/shifts")
+  getShiftSchedule(@Query("date") date?: string) {
+    return this.activityLogService.getShiftSchedule(date)
+  }
+
   // ---- Entradas de bitácora ----
 
   @Permissions(PermissionCode.ACTIVITY_LOG_CREATE)

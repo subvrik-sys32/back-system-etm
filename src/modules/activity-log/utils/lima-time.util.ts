@@ -86,3 +86,27 @@ export function getEndOfDayInLima(date: Date = new Date()): Date {
   return new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
 
 }
+/** YYYY-MM-DD en calendario Lima. */
+export function getLimaDateISO(date: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: LIMA_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date)
+
+  const year = parts.find(p => p.type === "year")!.value
+  const month = parts.find(p => p.type === "month")!.value
+  const day = parts.find(p => p.type === "day")!.value
+
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * Instante UTC en el que el reloj Lima alcanza `minutesOfDay`
+ * (0–1439) del día calendario Lima de `anchor`.
+ */
+export function limaMinutesToUtc(anchor: Date, minutesOfDay: number): Date {
+  const start = getStartOfTodayInLima(anchor)
+  return new Date(start.getTime() + minutesOfDay * 60 * 1000)
+}
