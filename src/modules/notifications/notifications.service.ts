@@ -396,6 +396,55 @@ export class NotificationsService{
 
   }
 
+  // Respuesta a invitación (accept / decline). Destinatario = quien
+  // convocó. Además se retira la TASK_SUMMONED del operario para que
+  // no le quede colgada en la campana después de decidir.
+  async notifyInviteResponse(params:{
+    inviterId:string
+    actorId:string
+    taskId:string
+    workflowStepId:string
+    accepted:boolean
+  }){
+
+    const type=params.accepted?"TASK_INVITE_ACCEPTED":"TASK_INVITE_DECLINED"
+    const messageSnippet=params.accepted
+      ?"Aceptó la convocatoria a una tarea"
+      :"Rechazó la convocatoria a una tarea"
+
+    // 1) Limpiar la invitación pendiente del operario (si sigue ahí).
+    await this.retractTaskAssignment(params.workflowStepId,params.actorId).catch(()=>{})
+
+    // 2) No notificar al convocante si es el mismo que responde.
+    if(params.inviterId===params.actorId)return
+
+    await this.notificationRepository.createMany([{
+      userId:params.inviterId,
+      actorId:params.actorId,
+      type,
+      taskId:params.taskId,
+      projectId:null,
+      workflowStepId:params.workflowStepId,
+      commentId:null,
+      messageSnippet,
+    }])
+
+    const [created]=await this.notificationRepository.findManyByWorkflowStepAndUser(
+      params.workflowStepId,
+      params.inviterId,
+    )
+
+    if(created){
+      this.realtime.publishToUser(created.userId,{
+        entity:"NOTIFICATION",
+        action:"CREATED",
+        id:created.id,
+        payload:this.enrichNotification(created),
+      })
+    }
+
+  }
+
   // "Desconvocar" desde TaskAreaPanel — deshace notifyTaskAssignment:
   // borra la(s) notificación(es) que se le habían mandado a este
   // operario por este step, y le avisa por realtime que

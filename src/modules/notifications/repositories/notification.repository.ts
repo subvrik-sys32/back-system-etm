@@ -83,7 +83,7 @@ export class NotificationRepository{
   createMany(data:({
     userId:string
     actorId:string
-    type:"MENTION"|"COMMENT"|"TASK_ASSIGNED"|"TASK_SUMMONED"
+    type:"MENTION"|"COMMENT"|"TASK_ASSIGNED"|"TASK_SUMMONED"|"TASK_INVITE_ACCEPTED"|"TASK_INVITE_DECLINED"
     workflowStepId:string|null
     // Opcional: MENTION/COMMENT siempre traen un comentario real
     // detrás, TASK_ASSIGNED/TASK_SUMMONED nacen de "Convocar" y no

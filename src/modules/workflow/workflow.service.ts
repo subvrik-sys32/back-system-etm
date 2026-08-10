@@ -554,6 +554,21 @@ export class WorkflowService {
       },
     })
 
+    // Avisar al convocante + retirar TASK_SUMMONED del operario.
+    // Antes no se notificaba a nadie: el convocante no se enteraba
+    // y la invitación le quedaba colgada al operario en la campana.
+    if (step.invitedById) {
+      await this.notifications.notifyInviteResponse({
+        inviterId: step.invitedById,
+        actorId: userId,
+        taskId: step.taskId,
+        workflowStepId: step.id,
+        accepted: true,
+      }).catch(() => {
+        // no crítico — la aceptación ya se persistió arriba
+      })
+    }
+
     this.publishDelta(
       {
         taskId: step.taskId,
@@ -577,7 +592,7 @@ export class WorkflowService {
 
     const step = await this.prisma.workflowStep.findUnique({
       where: { id: stepId },
-      select: { id: true, taskId: true, invitedOperatorId: true },
+      select: { id: true, taskId: true, invitedOperatorId: true, invitedById: true },
     })
 
     if (!step || step.invitedOperatorId !== userId) {
@@ -592,6 +607,18 @@ export class WorkflowService {
         invitedAt: null,
       },
     })
+
+    if (step.invitedById) {
+      await this.notifications.notifyInviteResponse({
+        inviterId: step.invitedById,
+        actorId: userId,
+        taskId: step.taskId,
+        workflowStepId: step.id,
+        accepted: false,
+      }).catch(() => {
+        // no crítico — el rechazo ya se persistió arriba
+      })
+    }
 
     this.publishDelta(
       {

@@ -255,6 +255,12 @@ enum NotificationType {
   // NO se tocó — el operario tiene que aceptar desde su "Mis tareas"
   // para que recién ahí se le asigne de verdad.
   TASK_SUMMONED
+  // Respuesta del operario a una invitación (modo INVITE).
+  // Destinatario: quien convocó (invitedById). Se crean en
+  // acceptInvite / declineInvite — antes no existían y el
+  // convocante no se enteraba de la respuesta.
+  TASK_INVITE_ACCEPTED
+  TASK_INVITE_DECLINED
 }
 
 model Priority {
