@@ -1,4 +1,12 @@
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from "class-validator"
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from "class-validator"
+import { ActivityDepartment } from "@prisma/client"
 
 export class UpdateActivityTypeDto {
 
@@ -26,5 +34,14 @@ export class UpdateActivityTypeDto {
   @IsOptional()
   @IsBoolean()
   pinned?: boolean
+
+  @IsOptional()
+  @IsEnum(ActivityDepartment)
+  department?: ActivityDepartment
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  code?: string
 
 }
