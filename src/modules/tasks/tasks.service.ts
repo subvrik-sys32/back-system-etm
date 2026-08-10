@@ -6,6 +6,7 @@ import { UpdateTaskDto } from "./dto/update-task.dto"
 import { ReorderTaskItemDto } from "./dto/reorder-task.dto"
 import { buildWorkflow, hasWorkflowStarted } from "@/modules/workflow/engine/rebuild-workflow"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
+import { parseDateOnly, withCalendarDates } from "@/shared/utils/calendar-date"
 
 @Injectable()
 export class TasksService{
@@ -79,11 +80,14 @@ export class TasksService{
         commentCount: stepCount?.comments ?? 0,
       }
     })
-    return {
+    const base = {
       ...(rest as Omit<T, "_count" | "workflowSteps">),
       ...(steps ? { workflowSteps: steps } : {}),
       commentCount: _count?.comments ?? 0,
     } as Omit<T, "_count"> & { commentCount: number }
+
+    // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null
+    return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
 
   async findAll(){
@@ -176,9 +180,7 @@ export class TasksService{
         thicknessId: dto.thicknessId,
         colorId: dto.colorId ?? null,
         plRt: dto.plRt ?? null,
-        deliveryDate: dto.deliveryDate
-          ? new Date(dto.deliveryDate)
-          : null,
+        deliveryDate: parseDateOnly(dto.deliveryDate ?? null),
         position: totalTasks + 1,
         createdById: userId,
         updatedById: userId,
@@ -189,15 +191,17 @@ export class TasksService{
       include: this.includeRelations,
     })
 
+    const mapped = this.withCommentCount(task)
+
     this.realtime.publish({
       entity: "TASK",
       action: "CREATED",
       id: task.id,
-      payload: task,
+      payload: mapped,
       excludeUserId: userId,
     })
 
-    return task
+    return mapped
 
   }
 
@@ -226,7 +230,9 @@ export class TasksService{
     const updateData={
       ...dto,
       updatedById:userId,
-      deliveryDate:dto.deliveryDate?new Date(dto.deliveryDate):undefined,
+      deliveryDate: dto.deliveryDate !== undefined
+        ? parseDateOnly(dto.deliveryDate)
+        : undefined,
     }
 
     await this.prisma.$transaction(async tx=>{
@@ -256,16 +262,21 @@ export class TasksService{
         include:this.includeRelations,
       })
 
-    if(task){
-      this.realtime.publish({
-        entity:"TASK",
-        action:"UPDATED",
-        id:task.id,
-        payload:task,
-        excludeUserId:userId,
-      })
+    if (!task) {
+      throw new NotFoundException("Task not found")
     }
-    return task
+
+    const mapped = this.withCommentCount(task)
+
+    this.realtime.publish({
+      entity: "TASK",
+      action: "UPDATED",
+      id: task.id,
+      payload: mapped,
+      excludeUserId: userId,
+    })
+
+    return mapped
   }
 
   async reorder(

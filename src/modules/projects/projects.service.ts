@@ -7,6 +7,7 @@ import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { CreateProjectDto } from "./dto/create-project.dto"
 import { UpdateProjectDto } from "./dto/update-project.dto"
 import { ReorderProjectItemDto } from "./dto/reorder-project.dto"
+import { parseDateOnly, withCalendarDates } from "@/shared/utils/calendar-date"
 
 @Injectable()
 export class ProjectsService{
@@ -51,10 +52,12 @@ export class ProjectsService{
     row: NonNullable<T>,
   ): Omit<NonNullable<T>, "_count"> & { commentCount: number } {
     const { _count, ...rest } = row
-    return {
+    const base = {
       ...(rest as Omit<NonNullable<T>, "_count">),
       commentCount: _count?.comments ?? 0,
     }
+    // deliveryDate siempre "YYYY-MM-DD" | null en la API
+    return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
 
   async findAll(){
@@ -112,7 +115,7 @@ export class ProjectsService{
         pmId:dto.pmId,
         stageId:dto.stageId,
         statusId:dto.statusId,
-        deliveryDate:dto.deliveryDate?new Date(dto.deliveryDate):null,
+        deliveryDate: parseDateOnly(dto.deliveryDate ?? null),
         sequence:(lastProject?.sequence??0)+1,
         position:totalProjects+1,
         createdById:userId,
@@ -121,15 +124,17 @@ export class ProjectsService{
       include:this.includeRelations,
     })
 
+    const mapped = this.withCommentCount(project as NonNullable<typeof project>)
+
     this.realtime.publish({
-      entity:"PROJECT",
-      action:"CREATED",
-      id:project.id,
-      payload:project,
-      excludeUserId:userId,
+      entity: "PROJECT",
+      action: "CREATED",
+      id: project.id,
+      payload: mapped,
+      excludeUserId: userId,
     })
 
-    return this.withCommentCount(project as NonNullable<typeof project>)
+    return mapped
   }
 
   async update(id:string,dto:UpdateProjectDto,userId:string){
@@ -146,7 +151,9 @@ export class ProjectsService{
     const updateData={
       ...dto,
       updatedById:userId,
-      deliveryDate:dto.deliveryDate?new Date(dto.deliveryDate):undefined,
+      deliveryDate: dto.deliveryDate !== undefined
+        ? parseDateOnly(dto.deliveryDate)
+        : undefined,
     }
 
     await this.prisma.project.update({
@@ -161,16 +168,20 @@ export class ProjectsService{
     })
 
     if(project){
+      const mapped = this.withCommentCount(project as NonNullable<typeof project>)
+
       this.realtime.publish({
-        entity:"PROJECT",
-        action:"UPDATED",
-        id:project.id,
-        payload:project,
-        excludeUserId:userId,
+        entity: "PROJECT",
+        action: "UPDATED",
+        id: project.id,
+        payload: mapped,
+        excludeUserId: userId,
       })
+
+      return mapped
     }
 
-    return this.withCommentCount(project as NonNullable<typeof project>)
+    throw new NotFoundException("Project not found")
   }
 
   async reorder(items:ReorderProjectItemDto[],userId:string){

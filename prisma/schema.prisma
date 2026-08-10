@@ -347,7 +347,7 @@ model Project {
   projectCode   String
   name          String
   clientId      String
-  deliveryDate  DateTime?
+  deliveryDate  DateTime? @db.Date
   position      Int            @default(0)
   createdById   String
   updatedById   String
@@ -385,7 +385,7 @@ model Task {
   thicknessId   String
   colorId       String?
   plRt          String?
-  deliveryDate  DateTime?
+  deliveryDate  DateTime? @db.Date
   position      Int            @default(0)
   createdById   String
   updatedById   String
