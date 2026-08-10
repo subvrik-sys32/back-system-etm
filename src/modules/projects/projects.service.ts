@@ -35,11 +35,14 @@ export class ProjectsService{
     },
     stage:true,
     status:true,
-    // Conteo de comentarios activos (no soft-deleted) para badges
-    // del listado. Una sola query agregada — NO trae los mensajes.
+    // Conteos agregados para badges del listado (una sola query).
+    // NO trae comentarios ni tareas, solo el número.
     _count:{
       select:{
         comments:{
+          where:{ deletedAt:null },
+        },
+        tasks:{
           where:{ deletedAt:null },
         },
       },
@@ -47,14 +50,24 @@ export class ProjectsService{
   }
 
 
-  /** Aplana `_count.comments` → `commentCount` (API estable para el front). */
-  private withCommentCount<T extends { _count?: { comments: number } }>(
+  /**
+   * Aplana `_count` → `commentCount` + `taskCount` (API estable).
+   * Misma idea que el badge de mensajes: el listado no necesita
+   * cargar las colecciones completas.
+   */
+  private withCommentCount<T extends {
+    _count?: { comments: number; tasks?: number }
+  }>(
     row: NonNullable<T>,
-  ): Omit<NonNullable<T>, "_count"> & { commentCount: number } {
+  ): Omit<NonNullable<T>, "_count"> & {
+    commentCount: number
+    taskCount: number
+  } {
     const { _count, ...rest } = row
     const base = {
       ...(rest as Omit<NonNullable<T>, "_count">),
       commentCount: _count?.comments ?? 0,
+      taskCount: _count?.tasks ?? 0,
     }
     // deliveryDate siempre "YYYY-MM-DD" | null en la API
     return withCalendarDates(base as Record<string, unknown>) as typeof base
