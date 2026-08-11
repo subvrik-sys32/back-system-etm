@@ -101,6 +101,15 @@ export class CommentsController {
   }
 
   // ---- Compartido ----
+  // ---- Mis comentarios (centro Mensajes) ----
+  // Solo los creados por el usuario autenticado.
+  // Debe ir ANTES de comments/:id para no chocar con el param.
+  @Permissions(PermissionCode.COMMENT_READ)
+  @Get("comments/mine")
+  findMine(@CurrentUser() user: CurrentUserType) {
+    return this.commentsService.findMine(user.id)
+  }
+
   @Permissions(PermissionCode.COMMENT_READ)
   @Get("comments/:id/read-status")
   getReadStatus(@Param("id") id:string){

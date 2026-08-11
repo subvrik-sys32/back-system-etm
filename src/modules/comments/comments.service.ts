@@ -32,6 +32,66 @@ export class CommentsService{
     return this.commentRepository.findAllByProject(projectId)
   }
 
+  /**
+   * Centro Mensajes: comentarios del usuario + route
+   * (processes | tasks | projects) e history, igual que notificaciones.
+   */
+  async findMine(userId: string) {
+    const rows = await this.commentRepository.findAllByUserId(userId)
+
+    return rows.map(comment => {
+      const task = comment.task
+      const workflowStep = comment.workflowStep
+      const project = comment.project ?? task?.project ?? null
+
+      const history =
+        !!task &&
+        Array.isArray(task.workflowSteps) &&
+        task.workflowSteps.length > 0 &&
+        task.workflowSteps.every(
+          (step: { status: string }) => step.status === "REVIEWED",
+        )
+
+      const route = {
+        module: workflowStep
+          ? ("processes" as const)
+          : task
+            ? ("tasks" as const)
+            : ("projects" as const),
+        processCode: workflowStep?.processCode ?? undefined,
+        history,
+      }
+
+      // No enviamos workflowSteps crudos al front (solo sirvieron para history)
+      const { workflowSteps: _ws, ...taskRest } = (task ?? {}) as {
+        workflowSteps?: unknown
+      } & Record<string, unknown>
+
+      return {
+        ...comment,
+        task: task
+          ? {
+              id: task.id,
+              reference: task.reference,
+              taskNumber: task.taskNumber,
+              project: task.project,
+            }
+          : null,
+        project,
+        workflowStep: workflowStep
+          ? {
+              id: workflowStep.id,
+              processCode: workflowStep.processCode,
+              status: workflowStep.status,
+            }
+          : null,
+        route,
+      }
+    })
+  }
+
+
+
   // Estado agregado de lectura del comentario.
   // Devuelve el total de destinatarios, cuántos ya lo leyeron y un
   // estado calculado:

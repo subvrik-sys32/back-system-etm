@@ -1,87 +1,143 @@
 import { Injectable } from "@nestjs/common"
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
-import { commentInclude } from "../entities/comment.entity"
+import {
+  commentInclude,
+  myCommentInclude,
+} from "../entities/comment.entity"
 
 @Injectable()
-export class CommentRepository{
+export class CommentRepository {
 
-  constructor(private readonly prisma:PrismaService){}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAllByTask(taskId:string){
+  findAllByTask(taskId: string) {
     return this.prisma.comment.findMany({
-      where:{ taskId, workflowStepId:null, deletedAt:null },
-      include:commentInclude,
-      orderBy:{ createdAt:"desc" },
+      where: { taskId, workflowStepId: null, deletedAt: null },
+      include: commentInclude,
+      orderBy: { createdAt: "desc" },
     })
   }
 
-  findAllByWorkflowStep(workflowStepId:string){
+  findAllByWorkflowStep(workflowStepId: string) {
     return this.prisma.comment.findMany({
-      where:{ workflowStepId, deletedAt:null },
-      include:commentInclude,
-      orderBy:{ createdAt:"desc" },
+      where: { workflowStepId, deletedAt: null },
+      include: commentInclude,
+      orderBy: { createdAt: "desc" },
     })
   }
 
-  findAllByProject(projectId:string){
+  findAllByProject(projectId: string) {
     return this.prisma.comment.findMany({
-      where:{ projectId, deletedAt:null },
-      include:commentInclude,
-      orderBy:{ createdAt:"desc" },
+      where: { projectId, deletedAt: null },
+      include: commentInclude,
+      orderBy: { createdAt: "desc" },
     })
   }
 
-  findById(id:string){
+  /**
+   * Comentarios del usuario autenticado, con contexto
+   * tarea / proyecto / proceso (mismo criterio que notificaciones).
+   */
+  findAllByUserId(userId: string) {
+    return this.prisma.comment.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: myCommentInclude,
+      orderBy: { createdAt: "desc" },
+    })
+  }
+
+  findById(id: string) {
     return this.prisma.comment.findFirst({
-      where:{ id, deletedAt:null },
-      include:commentInclude,
+      where: { id, deletedAt: null },
+      include: commentInclude,
     })
   }
 
-  async getWorkflowStepTaskId(workflowStepId:string){
-    const step=await this.prisma.workflowStep.findUnique({
-      where:{ id:workflowStepId },
-      select:{ taskId:true },
+  async getWorkflowStepTaskId(workflowStepId: string) {
+    const step = await this.prisma.workflowStep.findUnique({
+      where: { id: workflowStepId },
+      select: { taskId: true },
     })
-    return step?.taskId??null
+    return step?.taskId ?? null
   }
 
-  createForTask(taskId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
+  createForTask(
+    taskId: string,
+    userId: string,
+    message: string,
+    imageUrl?: string | null,
+    parentId?: string | null,
+  ) {
     return this.prisma.comment.create({
-      data:{ taskId, userId, message:message.trim(), workflowStepId:null, imageUrl, parentId },
-      include:commentInclude,
+      data: {
+        taskId,
+        userId,
+        message: message.trim(),
+        workflowStepId: null,
+        imageUrl,
+        parentId,
+      },
+      include: commentInclude,
     })
   }
 
-  createForWorkflowStep(taskId:string,workflowStepId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
+  createForWorkflowStep(
+    taskId: string,
+    workflowStepId: string,
+    userId: string,
+    message: string,
+    imageUrl?: string | null,
+    parentId?: string | null,
+  ) {
     return this.prisma.comment.create({
-      data:{ taskId, workflowStepId, userId, message:message.trim(), imageUrl, parentId },
-      include:commentInclude,
+      data: {
+        taskId,
+        workflowStepId,
+        userId,
+        message: message.trim(),
+        imageUrl,
+        parentId,
+      },
+      include: commentInclude,
     })
   }
 
-  createForProject(projectId:string,userId:string,message:string,imageUrl?:string|null,parentId?:string|null){
+  createForProject(
+    projectId: string,
+    userId: string,
+    message: string,
+    imageUrl?: string | null,
+    parentId?: string | null,
+  ) {
     return this.prisma.comment.create({
-      data:{ projectId, userId, message:message.trim(), imageUrl, parentId },
-      include:commentInclude,
+      data: {
+        projectId,
+        userId,
+        message: message.trim(),
+        imageUrl,
+        parentId,
+      },
+      include: commentInclude,
     })
   }
 
-  update(id:string,message:string){
+  update(id: string, message: string) {
     return this.prisma.comment.update({
-      where:{ id },
-      data:{ message:message.trim() },
-      include:commentInclude,
+      where: { id },
+      data: { message: message.trim() },
+      include: commentInclude,
     })
   }
 
-  softDelete(id:string){
+  softDelete(id: string) {
     return this.prisma.comment.update({
-      where:{ id },
-      data:{ deletedAt:new Date() },
+      where: { id },
+      data: { deletedAt: new Date() },
     })
   }
-
 
   countByTaskId(taskId: string) {
     return this.prisma.comment.count({
@@ -100,5 +156,4 @@ export class CommentRepository{
       where: { workflowStepId, deletedAt: null },
     })
   }
-
 }
