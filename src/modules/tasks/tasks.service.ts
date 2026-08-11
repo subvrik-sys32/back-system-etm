@@ -4,7 +4,7 @@ import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { CreateTaskDto } from "./dto/create-task.dto"
 import { UpdateTaskDto } from "./dto/update-task.dto"
 import { ReorderTaskItemDto } from "./dto/reorder-task.dto"
-import { buildWorkflow, hasWorkflowStarted } from "@/modules/workflow/engine/rebuild-workflow"
+import { buildWorkflow, hasWorkflowStarted, assertRouteOnlyAdds, planWorkflowMerge } from "@/modules/workflow/engine/rebuild-workflow"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { parseDateOnly, withCalendarDates } from "@/shared/utils/calendar-date"
 
@@ -212,7 +212,19 @@ export class TasksService{
         id:true,
         route:true,
         workflowSteps:{
-          select:{ status:true },
+          select:{
+            id:true,
+            processCode:true,
+            status:true,
+            operatorId:true,
+            startedAt:true,
+            completedAt:true,
+            reviewedAt:true,
+            piecesOutput:true,
+            plRtReal:true,
+            paintKgReal:true,
+            order:true,
+          },
         },
       },
     })
@@ -222,9 +234,18 @@ export class TasksService{
     }
 
     const routeChanged=dto.route!==undefined&&JSON.stringify(dto.route)!==JSON.stringify(exists.route)
+    const started=hasWorkflowStarted(exists.workflowSteps)
 
-    if(routeChanged&&hasWorkflowStarted(exists.workflowSteps)){
-      throw new BadRequestException("La ruta no puede modificarse porque la producción ya inició o finalizó.")
+    if(routeChanged&&started){
+      try{
+        assertRouteOnlyAdds(exists.route,dto.route!)
+      }catch(e){
+        throw new BadRequestException(
+          e instanceof Error
+            ? e.message
+            : "No se pueden quitar procesos de la ruta una vez iniciada la producción.",
+        )
+      }
     }
 
     const updateData={
@@ -241,7 +262,38 @@ export class TasksService{
         data:updateData,
       })
 
-      if(routeChanged){
+      if(!routeChanged) return
+
+      if(started){
+        // Solo agregar: conservar pasos existentes, crear los nuevos
+        const { toKeep, toCreate, toDelete } = planWorkflowMerge(
+          dto.route!,
+          exists.workflowSteps,
+        )
+
+        if(toDelete.length>0){
+          await tx.workflowStep.deleteMany({
+            where:{ id:{ in: toDelete } },
+          })
+        }
+
+        for(const step of toKeep){
+          await tx.workflowStep.update({
+            where:{ id: step.id },
+            data:{ order: step.order },
+          })
+        }
+
+        if(toCreate.length>0){
+          await tx.workflowStep.createMany({
+            data: toCreate.map(step=>({
+              ...step,
+              taskId: id,
+            })),
+          })
+        }
+      } else {
+        // Ruta aún no iniciada: rebuild completo
         await tx.workflowStep.deleteMany({
           where:{ taskId:id },
         })
