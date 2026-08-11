@@ -25,11 +25,6 @@ import { CurrentUser } from "@/shared/decorators/current-user.decorator"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 
-// Acá "department" es un query param opcional, no un @Roles/@Permissions
-// nuevo — la Bitácora de Producción y la de Ingeniería comparten los
-// mismos endpoints y permisos (ACTIVITY_LOG_*), la única diferencia
-// es el filtro de datos. El chequeo de "esto es solo para
-// Ingeniería" vive en el servicio (assertEngineeringAccess), no acá.
 @UseGuards(
   JwtAuthGuard,
   PermissionsGuard,
@@ -78,12 +73,8 @@ export class ActivityLogController {
     return this.activityLogService.removeType(id)
   }
 
-
   // ---- Franjas (estado Lima) ----
 
-  // Fuente de verdad para candados de UI. El front refetcha en
-  // nextBoundaryAt; no calcula upcoming/current/past con el reloj
-  // del browser (TZ distinta a America/Lima).
   @Permissions(PermissionCode.ACTIVITY_LOG_READ)
   @Get("activity-log/shifts")
   getShiftSchedule(@Query("date") date?: string) {
@@ -111,8 +102,25 @@ export class ActivityLogController {
     return this.activityLogService.findMyToday(user.id, department, user.roles, date)
   }
 
-  // Días con registros del usuario autenticado (calendario bitácora personal).
+  // Rango del usuario autenticado (agenda / mes). Solo ACTIVITY_LOG_READ.
   // userId siempre del token — no se acepta userId por query.
+  @Permissions(PermissionCode.ACTIVITY_LOG_READ)
+  @Get("activity-log/me")
+  findMyRange(
+    @CurrentUser() user: CurrentUserType,
+    @Query("from") from: string,
+    @Query("to") to: string,
+    @Query("department") department?: ActivityDepartment,
+  ) {
+    return this.activityLogService.findMyRange(
+      user.id,
+      from,
+      to,
+      department,
+      user.roles,
+    )
+  }
+
   @Permissions(PermissionCode.ACTIVITY_LOG_READ)
   @Get("activity-log/me/marked-dates")
   findMyMarkedDates(
@@ -130,7 +138,6 @@ export class ActivityLogController {
     )
   }
 
-  // Días con registros para supervisión / bitácora de equipo.
   @Permissions(PermissionCode.ACTIVITY_LOG_READ_ANY)
   @Get("activity-log/marked-dates")
   findMarkedDates(

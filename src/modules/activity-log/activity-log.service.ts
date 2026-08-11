@@ -511,6 +511,46 @@ export class ActivityLogService {
   }
 
   /**
+   * Logs del usuario autenticado en [from, to] (YYYY-MM-DD Lima).
+   * Solo ACTIVITY_LOG_READ — no usa READ_ANY.
+   */
+  async findMyRange(
+    userId: string,
+    from: string,
+    to: string,
+    department?: ActivityDepartment,
+    roles?: string[],
+  ) {
+    if (department && roles) {
+      this.assertDepartmentAccess(department, roles)
+    }
+
+    const start = getStartOfTodayInLima(new Date(`${from}T12:00:00.000Z`))
+    const end = getEndOfDayInLima(new Date(`${to}T12:00:00.000Z`))
+
+    return this.prisma.activityLog.findMany({
+      where: {
+        userId,
+        loggedAt: {
+          gte: start,
+          lt: end,
+        },
+        ...(department ? { activityType: { department } } : {}),
+      },
+      include: {
+        activityType: true,
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        task: {
+          select: { id: true, taskNumber: true, reference: true },
+        },
+      },
+      orderBy: { loggedAt: "asc" },
+    })
+  }
+
+  /**
    * Días (YYYY-MM-DD en Lima) en los que el usuario autenticado tiene
    * al menos un registro en el rango [from, to].
    * userId siempre del token — no se acepta userId del cliente.

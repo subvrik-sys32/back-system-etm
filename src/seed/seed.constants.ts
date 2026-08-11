@@ -86,9 +86,6 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.COMMENT_UPDATE,
     PermissionCode.COMMENT_DELETE,
 
-    // Bitácora hoy usa la misma bitácora "de Producción" (no tiene
-    // department propio todavía) hasta que se arme una bitácora
-    // específica para Administración a futuro.
     PermissionCode.ACTIVITY_LOG_CREATE,
     PermissionCode.ACTIVITY_LOG_READ,
     PermissionCode.ACTIVITY_LOG_DELETE,
@@ -112,10 +109,6 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.COMMENT_CREATE,
     PermissionCode.COMMENT_UPDATE,
 
-    // Sin esto, la Bitácora de Ingeniería que se armó en esta
-    // sesión queda inaccesible para el único rol al que pertenece
-    // — el ítem de nav no aparece (gateado por ACTIVITY_LOG_READ) y
-    // el backend rechaza cualquier intento igual.
     PermissionCode.ACTIVITY_LOG_CREATE,
     PermissionCode.ACTIVITY_LOG_READ,
     PermissionCode.ACTIVITY_LOG_DELETE,
@@ -160,10 +153,6 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.WORKFLOW_UPDATE,
     PermissionCode.WORKFLOW_REVIEW,
 
-    // Sin esto, EntitySelect (material/espesor/prioridad/cliente en
-    // los formularios de tarea/proyecto) tira 403 al abrir el
-    // dropdown — Producción tiene TASK_UPDATE, así que sí llega a
-    // esos formularios.
     PermissionCode.MASTER_DATA_READ,
 
     PermissionCode.USER_READ,
@@ -173,9 +162,6 @@ export const ROLE_PERMISSIONS = {
     PermissionCode.COMMENT_UPDATE,
     PermissionCode.COMMENT_DELETE,
 
-    // Sin esto, la Bitácora de Producción (el corazón de todo el
-    // plan de esta sesión) queda inaccesible para Operarios y
-    // Supervisores — exactamente el equipo para el que se construyó.
     PermissionCode.ACTIVITY_LOG_CREATE,
     PermissionCode.ACTIVITY_LOG_READ,
     PermissionCode.ACTIVITY_LOG_DELETE,
