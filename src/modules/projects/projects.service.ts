@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common"
-import { Prisma } from "@prisma/client"
+import { Prisma, WorkflowStatus } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
@@ -17,37 +17,57 @@ export class ProjectsService{
     private readonly realtime:RealtimeService,
   ){}
 
-  private readonly includeRelations={
-    client:true,
+  /**
+   * Tareas activas = !isWorkflowCompleted (front):
+   * sin steps, o algún step ≠ REVIEWED.
+   * Enum tipado: sin esto TS infiere string y rompe ProjectInclude.
+   */
+  private readonly activeTaskWhere: Prisma.TaskWhereInput = {
+    deletedAt: null,
+    OR: [
+      { workflowSteps: { none: {} } },
+      {
+        workflowSteps: {
+          some: {
+            status: { not: WorkflowStatus.REVIEWED },
+          },
+        },
+      },
+    ],
+  }
+
+  private readonly includeRelations = {
+    client: true,
     // ANTES: include:{role:true} sin select/omit — Prisma devuelve
     // TODOS los campos escalares del modelo User cuando no hay
     // select/omit explícito, incluido passwordHash. Se estaba
     // mandando el hash de contraseña del PM al frontend en cada
     // fetch de proyectos. select explícito con solo lo que se
     // renderiza de verdad (badge nombre+color+ícono).
-    pm:{
-      select:{
-        id:true,
-        name:true,
-        color:true,
-        icon:true,
+    pm: {
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
       },
     },
-    stage:true,
-    status:true,
+    stage: true,
+    status: true,
     // Conteos agregados para badges del listado (una sola query).
     // NO trae comentarios ni tareas, solo el número.
-    _count:{
-      select:{
-        comments:{
-          where:{ deletedAt:null },
+    // taskCount = tareas ACTIVAS (activeTaskWhere).
+    _count: {
+      select: {
+        comments: {
+          where: { deletedAt: null },
         },
-        tasks:{
-          where:{ deletedAt:null },
+        tasks: {
+          where: this.activeTaskWhere,
         },
       },
     },
-  }
+  } satisfies Prisma.ProjectInclude
 
 
   /**

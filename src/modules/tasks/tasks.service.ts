@@ -55,10 +55,16 @@ export class TasksService{
       },
       orderBy:{ order:"asc" as const },
     },
+    // commentCount de la TAREA: solo mensajes con scope task
+    // (workflowStepId null). Los de proceso llevan taskId+stepId
+    // y se cuentan en workflowStep.commentCount.
     _count:{
       select:{
         comments:{
-          where:{ deletedAt:null },
+          where:{
+            deletedAt:null,
+            workflowStepId:null,
+          },
         },
       },
     },

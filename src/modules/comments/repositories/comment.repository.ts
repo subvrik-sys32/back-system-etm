@@ -140,8 +140,10 @@ export class CommentRepository {
   }
 
   countByTaskId(taskId: string) {
+    // Solo comentarios de la tarea, no de sus procesos
+    // (createForWorkflowStep también setea taskId).
     return this.prisma.comment.count({
-      where: { taskId, deletedAt: null },
+      where: { taskId, workflowStepId: null, deletedAt: null },
     })
   }
 
