@@ -343,6 +343,30 @@ export class SeedService {
 
     }
 
+    // Tipos genéricos de ingeniería que deben vivir en "Otros"
+    // (por si quedaron pinned=true de una corrida / alta manual previa).
+    await this.prisma.activityType.updateMany({
+      where: {
+        department: "INGENIERIA",
+        deletedAt: null,
+        label: { in: ["Diseño", "Revisión de planos", "Ingeniería"] },
+      },
+      data: { pinned: false },
+    })
+
+    // Planos de Fabricación: nunca tijera
+    await this.prisma.activityType.updateMany({
+      where: {
+        department: "INGENIERIA",
+        deletedAt: null,
+        OR: [
+          { code: "PLANOS_FABRICACION" },
+          { label: "Planos de Fabricación" },
+        ],
+      },
+      data: { icon: "drafting" },
+    })
+
   }
 
   private async seedMaterials() {

@@ -98,16 +98,12 @@ export const ACTIVITY_TYPES = [
 
 ]
 
-// Bitácora de Ingeniería — mismo motor, 100% manual, sin
-// auto-registro (a diferencia de Producción, acá no hay un
-// WorkflowStep que "completar"). department se pasa explícito
-// porque el default del modelo es PRODUCCION.
+// Bitácora de Ingeniería — mismo motor que Producción:
+// pocos pinned en el grid, el resto dentro de "Otros".
 //
-// Lista independiente del Stage (código separado, no confundir):
-// esto es "qué está haciendo la persona ahora mismo" para la
-// Bitácora, no la etapa del proyecto. Los code no colisionan con
-// los de ACTIVITY_TYPES de arriba porque comparten la misma tabla
-// (code es único a nivel global, no por department).
+// Fuera del grid (pinned: false): Diseño genérico, Revisión de
+// planos, Ingeniería (concepto amplio).
+// Planos de Fabricación: ícono drafting (NO scissors/tijera).
 export const ENGINEERING_ACTIVITY_TYPES = [
 
   {
@@ -150,8 +146,6 @@ export const ENGINEERING_ACTIVITY_TYPES = [
     department: "INGENIERIA" as const,
   },
 
-  // Antes iban a ser dos ("LM y Geos" + "CAM: Nest y DXF") —
-  // fusionadas en una sola a pedido.
   {
     code: "CAM",
     label: "CAM",
@@ -162,12 +156,11 @@ export const ENGINEERING_ACTIVITY_TYPES = [
     department: "INGENIERIA" as const,
   },
 
-  // Antes iban a ser dos ("Planos de Doblez" + "Planos de
-  // Soldadura") — fusionadas en una sola a pedido.
   {
     code: "PLANOS_FABRICACION",
     label: "Planos de Fabricación",
-    icon: "scissors",
+    // No scissors: confundía con corte; drafting = planos.
+    icon: "drafting",
     color: "#F97316",
     order: 5,
     pinned: true,
@@ -191,6 +184,58 @@ export const ENGINEERING_ACTIVITY_TYPES = [
     color: "#22C55E",
     order: 7,
     pinned: true,
+    department: "INGENIERIA" as const,
+  },
+
+  // —— Dentro de "Otros" (mismo patrón que Producción) ——
+
+  {
+    code: "DISENO",
+    label: "Diseño",
+    icon: "pencil",
+    color: "#6366F1",
+    order: 20,
+    pinned: false,
+    department: "INGENIERIA" as const,
+  },
+
+  {
+    code: "REVISION_PLANOS",
+    label: "Revisión de planos",
+    icon: "clipboard",
+    color: "#14B8A6",
+    order: 21,
+    pinned: false,
+    department: "INGENIERIA" as const,
+  },
+
+  {
+    code: "INGENIERIA_GEN",
+    label: "Ingeniería",
+    icon: "cog",
+    color: "#0EA5E9",
+    order: 22,
+    pinned: false,
+    department: "INGENIERIA" as const,
+  },
+
+  {
+    code: "REUNION_TECNICA",
+    label: "Reunión técnica",
+    icon: "users",
+    color: "#8B5CF6",
+    order: 23,
+    pinned: false,
+    department: "INGENIERIA" as const,
+  },
+
+  {
+    code: "SOPORTE_PRODUCCION",
+    label: "Soporte a Producción",
+    icon: "tool",
+    color: "#F59E0B",
+    order: 24,
+    pinned: false,
     department: "INGENIERIA" as const,
   },
 
