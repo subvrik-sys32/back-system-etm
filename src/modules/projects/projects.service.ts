@@ -181,6 +181,28 @@ export class ProjectsService{
       throw new NotFoundException("Project not found")
     }
 
+    // Completar proyecto solo si no hay tareas activas
+    // (misma regla que taskCount / isWorkflowCompleted en el front).
+    if (dto.statusId) {
+      const nextStatus = await this.prisma.status.findUnique({
+        where: { id: dto.statusId },
+        select: { code: true },
+      })
+      if (nextStatus?.code === "COMPLETED") {
+        const activeTasks = await this.prisma.task.count({
+          where: {
+            projectId: id,
+            ...this.activeTaskWhere,
+          },
+        })
+        if (activeTasks > 0) {
+          throw new BadRequestException(
+            `No se puede completar el proyecto: hay ${activeTasks} tarea${activeTasks === 1 ? "" : "s"} activa${activeTasks === 1 ? "" : "s"}`,
+          )
+        }
+      }
+    }
+
     const updateData={
       ...dto,
       updatedById:userId,
