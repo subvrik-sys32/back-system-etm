@@ -327,12 +327,51 @@ export class TasksService{
       }
     }
 
-    const updateData={
-      ...dto,
-      updatedById:userId,
-      deliveryDate: dto.deliveryDate !== undefined
-        ? parseDateOnly(dto.deliveryDate)
-        : undefined,
+    const {
+      materials,
+      materialId,
+      thicknessId,
+      pieces,
+      deliveryDate,
+      ...restDto
+    } = dto
+
+    let materialPatch: {
+      materialId?: string
+      thicknessId?: string
+      pieces?: number
+    } = {}
+    let linesToWrite: Array<{
+      materialId: string
+      thicknessId: string
+      pieces: number
+      sortOrder: number
+    }> | null = null
+
+    if (materials && materials.length > 0) {
+      const resolved = this.resolveMaterialLines({ materials })
+      materialPatch = {
+        materialId: resolved.materialId,
+        thicknessId: resolved.thicknessId,
+        pieces: resolved.totalPieces,
+      }
+      linesToWrite = resolved.lines
+    } else if (materialId || thicknessId || pieces !== undefined) {
+      materialPatch = {
+        ...(materialId ? { materialId } : {}),
+        ...(thicknessId ? { thicknessId } : {}),
+        ...(pieces !== undefined ? { pieces } : {}),
+      }
+    }
+
+    const updateData = {
+      ...restDto,
+      ...materialPatch,
+      updatedById: userId,
+      deliveryDate:
+        deliveryDate !== undefined
+          ? parseDateOnly(deliveryDate)
+          : undefined,
     }
 
     await this.prisma.$transaction(async tx=>{
@@ -340,6 +379,13 @@ export class TasksService{
         where:{ id },
         data:updateData,
       })
+
+      if (linesToWrite) {
+        await tx.taskMaterialLine.deleteMany({ where: { taskId: id } })
+        await tx.taskMaterialLine.createMany({
+          data: linesToWrite.map((l) => ({ ...l, taskId: id })),
+        })
+      }
 
       if(!routeChanged) return
 
