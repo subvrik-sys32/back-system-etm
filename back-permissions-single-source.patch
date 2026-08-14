@@ -1,0 +1,204 @@
+diff --git a/src/core/enums/permission-code.enum.ts b/src/core/enums/permission-code.enum.ts
+index b90799d..1fb99df 100644
+--- a/src/core/enums/permission-code.enum.ts
++++ b/src/core/enums/permission-code.enum.ts
+@@ -40,6 +40,8 @@ export enum PermissionCode {
+   ACTIVITY_LOG_DELETE = "ACTIVITY_LOG_DELETE",
+   ACTIVITY_TYPE_MANAGE = "ACTIVITY_TYPE_MANAGE",
+ 
+-  ROLE_MANAGE = "ROLE_MANAGE"
++  ROLE_MANAGE = "ROLE_MANAGE",
++
++  NESTING_READ = "NESTING_READ",
+ 
+ }
+\ No newline at end of file
+diff --git a/src/modules/auth/auth.service.ts b/src/modules/auth/auth.service.ts
+index a75831e..cd989de 100644
+--- a/src/modules/auth/auth.service.ts
++++ b/src/modules/auth/auth.service.ts
+@@ -247,9 +247,14 @@ export class AuthService {
+ 
+   }
+ 
++  /**
++   * Sesión actual: permisos desde DB + accessToken fresco.
++   * F5 / bootstrap del front deben persistir este token para que
++   * PermissionsGuard vea los mismos códigos que el Set del cliente.
++   */
+   async me(
+     userId: string,
+-  ): Promise<MeResponseDto> {
++  ): Promise<LoginResponseDto> {
+ 
+     const user =
+       await this.prisma.user.findUnique({
+@@ -268,41 +273,8 @@ export class AuthService {
+       )
+     }
+ 
+-    const permissions =
+-      this.computeEffectivePermissions(user)
+-
+-    return {
+-      permissions,
+-      user: {
+-        id: user.id,
+-        username: user.username,
+-        name: user.name,
+-        email: user.email,
+-        level: user.level,
+-        icon: user.icon,
+-        color: user.color,
+-        active: user.active,
+-        avatarUrl: user.avatarUrl,
+-        phone: user.phone,
+-        position: user.position,
+-        roles: user.roles.map(role => ({
+-          id: role.id,
+-          code: role.code,
+-          name: role.name,
+-          icon: role.icon,
+-          color: role.color,
+-          active: role.active,
+-        })),
+-        // Array ahora (m2m) — antes un solo area nullable.
+-        areas: user.areas.map(area => ({
+-          id: area.id,
+-          code: area.code,
+-          label: area.label,
+-          processCode: area.processCode,
+-        })),
+-      },
+-    }
+-
++    // Misma ruta que login/refresh → una sola fuente de verdad.
++    return this.issueSession(user)
+   }
+ 
+-}
+\ No newline at end of file
++}
+diff --git a/src/seed/permissions.seed.ts b/src/seed/permissions.seed.ts
+index 7aa5a69..6b8bf91 100644
+--- a/src/seed/permissions.seed.ts
++++ b/src/seed/permissions.seed.ts
+@@ -1,38 +1,9 @@
+-export const permissionsSeed=[
+-
+-  "PROJECT_CREATE",
+-  "PROJECT_READ",
+-  "PROJECT_UPDATE",
+-  "PROJECT_DELETE",
+-
+-  "TASK_CREATE",
+-  "TASK_READ",
+-  "TASK_UPDATE",
+-  "TASK_DELETE",
+-
+-  "WORKFLOW_READ",
+-  "WORKFLOW_UPDATE",
+-
+-  "MASTER_DATA_READ",
+-  "MASTER_DATA_UPDATE",
+-
+-  "USER_CREATE",
+-  "USER_READ",
+-  "USER_UPDATE",
+-  "USER_DELETE",
+-
+-  "COMMENT_READ",
+-  "COMMENT_CREATE",
+-  "COMMENT_UPDATE",
+-  "COMMENT_DELETE",
+-  "COMMENT_DELETE_ANY",
+-
+-  "ACTIVITY_LOG_READ",
+-  "ACTIVITY_LOG_CREATE",
+-  "ACTIVITY_LOG_READ_ANY",
+-  "ACTIVITY_LOG_DELETE",
+-  "ACTIVITY_TYPE_MANAGE",
+-
+-  "ROLE_MANAGE",
+-
+-]
+\ No newline at end of file
++/**
++ * Fuente única: PermissionCode.
++ * No mantener listas a mano — cualquier código nuevo del enum
++ * entra solo al seed al correr seedPermissions / seedRolePermissions.
++ */
++import { PermissionCode } from "@/core/enums/permission-code.enum"
++
++/** @deprecated Usar PERMISSIONS de seed.constants (Object.values PermissionCode). */
++export const permissionsSeed = Object.values(PermissionCode)
+diff --git a/src/seed/seed.service.ts b/src/seed/seed.service.ts
+index e32d546..2a5ee3d 100644
+--- a/src/seed/seed.service.ts
++++ b/src/seed/seed.service.ts
+@@ -206,15 +206,28 @@ export class SeedService {
+         continue
+       }
+ 
++      const wantedCodes = permissions as unknown as string[]
++
+       const currentPermissions =
+         await this.prisma.permission.findMany({
+           where: {
+             code: {
+-              in: permissions as unknown as string[],
++              in: wantedCodes,
+             },
+           },
+         })
+ 
++      // Fail loud: lista del rol vs filas en DB (evita omitir
++      // WORKFLOW_REVIEW en silencio si el seed de permission falló).
++      if (currentPermissions.length !== wantedCodes.length) {
++        const found = new Set(currentPermissions.map(p => p.code))
++        const missing = wantedCodes.filter(c => !found.has(c))
++        throw new Error(
++          `Role ${roleName}: permissions missing in DB: ${missing.join(", ")}. ` +
++            `Run seedPermissions first (single source: PermissionCode enum).`,
++        )
++      }
++
+       const currentPermissionIds =
+         currentPermissions.map(
+           permission => permission.id,
+diff --git a/src/shared/guards/permissions.guard.ts b/src/shared/guards/permissions.guard.ts
+index 659049a..43e9203 100644
+--- a/src/shared/guards/permissions.guard.ts
++++ b/src/shared/guards/permissions.guard.ts
+@@ -9,8 +9,13 @@ import {
+ import { Reflector } from "@nestjs/core"
+ 
+ import { PERMISSIONS_KEY } from "@/shared/decorators/permissions.decorator"
+-import { RoleCode } from "@/core/enums/role-code.enum"
+ 
++/**
++ * Única regla: el JWT debe traer TODOS los códigos requeridos.
++ * Los permisos del token se recalculan en login / refresh / me
++ * (issueSession) desde roles + overrides en DB.
++ * Sin bypass por rol — ADMIN obtiene todos vía seed ROLE_PERMISSIONS.
++ */
+ @Injectable()
+ export class PermissionsGuard implements CanActivate {
+   private readonly logger = new Logger(PermissionsGuard.name)
+@@ -40,15 +45,8 @@ export class PermissionsGuard implements CanActivate {
+       throw new ForbiddenException()
+     }
+ 
+-    const roles: string[] = user.roles ?? []
+-    if (roles.includes(RoleCode.ADMIN) || roles.includes("ADMIN")) {
+-      this.logger.debug(
+-        `PermissionsGuard ADMIN bypass ${(performance.now() - start).toFixed(1)} ms`,
+-      )
+-      return true
+-    }
+-
+     const permissions: string[] = user.permissions ?? []
++
+     const hasPermission = requiredPermissions.every(permission =>
+       permissions.includes(permission),
+     )

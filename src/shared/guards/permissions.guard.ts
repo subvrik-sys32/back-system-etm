@@ -9,8 +9,13 @@ import {
 import { Reflector } from "@nestjs/core"
 
 import { PERMISSIONS_KEY } from "@/shared/decorators/permissions.decorator"
-import { RoleCode } from "@/core/enums/role-code.enum"
 
+/**
+ * Única regla: el JWT debe traer TODOS los códigos requeridos.
+ * Los permisos del token se recalculan en login / refresh / me
+ * (issueSession) desde roles + overrides en DB.
+ * Sin bypass por rol — ADMIN obtiene todos vía seed ROLE_PERMISSIONS.
+ */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   private readonly logger = new Logger(PermissionsGuard.name)
@@ -40,15 +45,8 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException()
     }
 
-    const roles: string[] = user.roles ?? []
-    if (roles.includes(RoleCode.ADMIN) || roles.includes("ADMIN")) {
-      this.logger.debug(
-        `PermissionsGuard ADMIN bypass ${(performance.now() - start).toFixed(1)} ms`,
-      )
-      return true
-    }
-
     const permissions: string[] = user.permissions ?? []
+
     const hasPermission = requiredPermissions.every(permission =>
       permissions.includes(permission),
     )

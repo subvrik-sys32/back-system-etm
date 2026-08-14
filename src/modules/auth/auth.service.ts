@@ -247,9 +247,14 @@ export class AuthService {
 
   }
 
+  /**
+   * Sesión actual: permisos desde DB + accessToken fresco.
+   * F5 / bootstrap del front deben persistir este token para que
+   * PermissionsGuard vea los mismos códigos que el Set del cliente.
+   */
   async me(
     userId: string,
-  ): Promise<MeResponseDto> {
+  ): Promise<LoginResponseDto> {
 
     const user =
       await this.prisma.user.findUnique({
@@ -268,41 +273,8 @@ export class AuthService {
       )
     }
 
-    const permissions =
-      this.computeEffectivePermissions(user)
-
-    return {
-      permissions,
-      user: {
-        id: user.id,
-        username: user.username,
-        name: user.name,
-        email: user.email,
-        level: user.level,
-        icon: user.icon,
-        color: user.color,
-        active: user.active,
-        avatarUrl: user.avatarUrl,
-        phone: user.phone,
-        position: user.position,
-        roles: user.roles.map(role => ({
-          id: role.id,
-          code: role.code,
-          name: role.name,
-          icon: role.icon,
-          color: role.color,
-          active: role.active,
-        })),
-        // Array ahora (m2m) — antes un solo area nullable.
-        areas: user.areas.map(area => ({
-          id: area.id,
-          code: area.code,
-          label: area.label,
-          processCode: area.processCode,
-        })),
-      },
-    }
-
+    // Misma ruta que login/refresh → una sola fuente de verdad.
+    return this.issueSession(user)
   }
 
 }

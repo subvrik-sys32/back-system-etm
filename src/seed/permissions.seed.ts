@@ -1,38 +1,9 @@
-export const permissionsSeed=[
+/**
+ * Fuente única: PermissionCode.
+ * No mantener listas a mano — cualquier código nuevo del enum
+ * entra solo al seed al correr seedPermissions / seedRolePermissions.
+ */
+import { PermissionCode } from "@/core/enums/permission-code.enum"
 
-  "PROJECT_CREATE",
-  "PROJECT_READ",
-  "PROJECT_UPDATE",
-  "PROJECT_DELETE",
-
-  "TASK_CREATE",
-  "TASK_READ",
-  "TASK_UPDATE",
-  "TASK_DELETE",
-
-  "WORKFLOW_READ",
-  "WORKFLOW_UPDATE",
-
-  "MASTER_DATA_READ",
-  "MASTER_DATA_UPDATE",
-
-  "USER_CREATE",
-  "USER_READ",
-  "USER_UPDATE",
-  "USER_DELETE",
-
-  "COMMENT_READ",
-  "COMMENT_CREATE",
-  "COMMENT_UPDATE",
-  "COMMENT_DELETE",
-  "COMMENT_DELETE_ANY",
-
-  "ACTIVITY_LOG_READ",
-  "ACTIVITY_LOG_CREATE",
-  "ACTIVITY_LOG_READ_ANY",
-  "ACTIVITY_LOG_DELETE",
-  "ACTIVITY_TYPE_MANAGE",
-
-  "ROLE_MANAGE",
-
-]
+/** @deprecated Usar PERMISSIONS de seed.constants (Object.values PermissionCode). */
+export const permissionsSeed = Object.values(PermissionCode)

@@ -206,14 +206,27 @@ export class SeedService {
         continue
       }
 
+      const wantedCodes = permissions as unknown as string[]
+
       const currentPermissions =
         await this.prisma.permission.findMany({
           where: {
             code: {
-              in: permissions as unknown as string[],
+              in: wantedCodes,
             },
           },
         })
+
+      // Fail loud: lista del rol vs filas en DB (evita omitir
+      // WORKFLOW_REVIEW en silencio si el seed de permission falló).
+      if (currentPermissions.length !== wantedCodes.length) {
+        const found = new Set(currentPermissions.map(p => p.code))
+        const missing = wantedCodes.filter(c => !found.has(c))
+        throw new Error(
+          `Role ${roleName}: permissions missing in DB: ${missing.join(", ")}. ` +
+            `Run seedPermissions first (single source: PermissionCode enum).`,
+        )
+      }
 
       const currentPermissionIds =
         currentPermissions.map(
