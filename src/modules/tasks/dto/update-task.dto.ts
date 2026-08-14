@@ -14,6 +14,10 @@ import {
   ProcessCode,
 } from "@prisma/client"
 
+import { Type } from "class-transformer"
+import { ValidateNested } from "class-validator"
+import { TaskMaterialLineDto } from "./task-material-line.dto"
+
 export class UpdateTaskDto {
 
   @IsOptional()
@@ -79,5 +83,12 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   deliveryDate?:string
+
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TaskMaterialLineDto)
+  materials?: TaskMaterialLineDto[]
 
 }

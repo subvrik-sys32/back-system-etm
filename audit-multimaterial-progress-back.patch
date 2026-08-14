@@ -1,0 +1,357 @@
+diff --git a/prisma/migrations/20260814130000_task_material_lines/migration.sql b/prisma/migrations/20260814130000_task_material_lines/migration.sql
+new file mode 100644
+index 0000000..7b4a6a4
+--- /dev/null
++++ b/prisma/migrations/20260814130000_task_material_lines/migration.sql
+@@ -0,0 +1,29 @@
++-- CreateTable
++CREATE TABLE IF NOT EXISTS "TaskMaterialLine" (
++    "id" TEXT NOT NULL,
++    "taskId" TEXT NOT NULL,
++    "materialId" TEXT NOT NULL,
++    "thicknessId" TEXT NOT NULL,
++    "pieces" INTEGER NOT NULL,
++    "sortOrder" INTEGER NOT NULL DEFAULT 0,
++    CONSTRAINT "TaskMaterialLine_pkey" PRIMARY KEY ("id")
++);
++
++CREATE INDEX IF NOT EXISTS "TaskMaterialLine_taskId_idx" ON "TaskMaterialLine"("taskId");
++
++ALTER TABLE "TaskMaterialLine" DROP CONSTRAINT IF EXISTS "TaskMaterialLine_taskId_fkey";
++ALTER TABLE "TaskMaterialLine" ADD CONSTRAINT "TaskMaterialLine_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
++
++ALTER TABLE "TaskMaterialLine" DROP CONSTRAINT IF EXISTS "TaskMaterialLine_materialId_fkey";
++ALTER TABLE "TaskMaterialLine" ADD CONSTRAINT "TaskMaterialLine_materialId_fkey" FOREIGN KEY ("materialId") REFERENCES "Material"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++
++ALTER TABLE "TaskMaterialLine" DROP CONSTRAINT IF EXISTS "TaskMaterialLine_thicknessId_fkey";
++ALTER TABLE "TaskMaterialLine" ADD CONSTRAINT "TaskMaterialLine_thicknessId_fkey" FOREIGN KEY ("thicknessId") REFERENCES "Thickness"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++
++-- Backfill: one line per existing task
++INSERT INTO "TaskMaterialLine" ("id", "taskId", "materialId", "thicknessId", "pieces", "sortOrder")
++SELECT gen_random_uuid()::text, t."id", t."materialId", t."thicknessId", t."pieces", 0
++FROM "Task" t
++WHERE NOT EXISTS (
++  SELECT 1 FROM "TaskMaterialLine" l WHERE l."taskId" = t."id"
++);
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index c4c363e..98cba63 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -284,22 +284,24 @@ model Material {
+   deletedAt DateTime?
+   createdAt DateTime  @default(now())
+   updatedAt DateTime  @updatedAt
+-  color     String
+-  icon      String
+-  tasks     Task[]
++  color         String
++  icon          String
++  tasks         Task[]
++  materialLines TaskMaterialLine[]
+ }
+ 
+ model Thickness {
+-  id        String    @id @default(uuid())
+-  code      String    @unique
+-  name      String
+-  active    Boolean   @default(true)
+-  deletedAt DateTime?
+-  createdAt DateTime  @default(now())
+-  updatedAt DateTime  @updatedAt
+-  color     String
+-  icon      String
+-  tasks     Task[]
++  id            String             @id @default(uuid())
++  code          String             @unique
++  name          String
++  active        Boolean            @default(true)
++  deletedAt     DateTime?
++  createdAt     DateTime           @default(now())
++  updatedAt     DateTime           @updatedAt
++  color         String
++  icon          String
++  tasks         Task[]
++  materialLines TaskMaterialLine[]
+ }
+ 
+ model Color {
+@@ -401,12 +403,27 @@ model Task {
+   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   thickness     Thickness      @relation(fields: [thicknessId], references: [id])
+   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
++  materialLines TaskMaterialLine[]
+   workflowSteps WorkflowStep[]
+   comments      Comment[]
+   activityLogs  ActivityLog[]
+   notifications Notification[]
+ }
+ 
++model TaskMaterialLine {
++  id          String    @id @default(uuid())
++  taskId      String
++  materialId  String
++  thicknessId String
++  pieces      Int
++  sortOrder   Int       @default(0)
++  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
++  material    Material  @relation(fields: [materialId], references: [id])
++  thickness   Thickness @relation(fields: [thicknessId], references: [id])
++
++  @@index([taskId])
++}
++
+ model WorkflowStep {
+   id                String         @id @default(uuid())
+   taskId            String
+diff --git a/src/modules/projects/projects.service.ts b/src/modules/projects/projects.service.ts
+index 0442895..7aeac34 100644
+--- a/src/modules/projects/projects.service.ts
++++ b/src/modules/projects/projects.service.ts
+@@ -54,6 +54,22 @@ export class ProjectsService{
+     },
+     stage: true,
+     status: true,
++    createdBy: {
++      select: {
++        id: true,
++        name: true,
++        color: true,
++        icon: true,
++      },
++    },
++    updatedBy: {
++      select: {
++        id: true,
++        name: true,
++        color: true,
++        icon: true,
++      },
++    },
+     // Conteos agregados para badges del listado (una sola query).
+     // NO trae comentarios ni tareas, solo el número.
+     // taskCount = tareas ACTIVAS (activeTaskWhere).
+diff --git a/src/modules/tasks/dto/create-task.dto.ts b/src/modules/tasks/dto/create-task.dto.ts
+index 44745e0..b429c15 100644
+--- a/src/modules/tasks/dto/create-task.dto.ts
++++ b/src/modules/tasks/dto/create-task.dto.ts
+@@ -14,6 +14,18 @@ import {
+   ProcessCode,
+ } from "@prisma/client"
+ 
++import {
++  Type,
++} from "class-transformer"
++
++import {
++  ValidateNested,
++} from "class-validator"
++
++import {
++  TaskMaterialLineDto,
++} from "./task-material-line.dto"
++
+ export class CreateTaskDto {
+ 
+   @IsString()
+@@ -22,8 +34,9 @@ export class CreateTaskDto {
+   @IsString()
+   reference!: string
+ 
++  @IsOptional()
+   @Min(1)
+-  pieces!: number
++  pieces?: number
+ 
+   @IsOptional()
+   @IsNumber()
+@@ -55,11 +68,20 @@ export class CreateTaskDto {
+   @IsString()
+   priorityId!: string
+ 
++  @IsOptional()
+   @IsString()
+-  materialId!: string
++  materialId?: string
+ 
++  @IsOptional()
+   @IsString()
+-  thicknessId!: string
++  thicknessId?: string
++
++  /** Multi-material: cada línea material+espesor+piezas. */
++  @IsOptional()
++  @IsArray()
++  @ValidateNested({ each: true })
++  @Type(() => TaskMaterialLineDto)
++  materials?: TaskMaterialLineDto[]
+ 
+   @IsOptional()
+   @IsString()
+diff --git a/src/modules/tasks/dto/task-material-line.dto.ts b/src/modules/tasks/dto/task-material-line.dto.ts
+new file mode 100644
+index 0000000..0c7b228
+--- /dev/null
++++ b/src/modules/tasks/dto/task-material-line.dto.ts
+@@ -0,0 +1,13 @@
++import { IsInt, IsString, Min } from "class-validator"
++
++export class TaskMaterialLineDto {
++  @IsString()
++  materialId!: string
++
++  @IsString()
++  thicknessId!: string
++
++  @IsInt()
++  @Min(1)
++  pieces!: number
++}
+diff --git a/src/modules/tasks/dto/update-task.dto.ts b/src/modules/tasks/dto/update-task.dto.ts
+index 60bffb0..9ec51a0 100644
+--- a/src/modules/tasks/dto/update-task.dto.ts
++++ b/src/modules/tasks/dto/update-task.dto.ts
+@@ -14,6 +14,10 @@ import {
+   ProcessCode,
+ } from "@prisma/client"
+ 
++import { Type } from "class-transformer"
++import { ValidateNested } from "class-validator"
++import { TaskMaterialLineDto } from "./task-material-line.dto"
++
+ export class UpdateTaskDto {
+ 
+   @IsOptional()
+@@ -80,4 +84,11 @@ export class UpdateTaskDto {
+   @IsDateString()
+   deliveryDate?:string
+ 
+-}
+\ No newline at end of file
++
++  @IsOptional()
++  @IsArray()
++  @ValidateNested({ each: true })
++  @Type(() => TaskMaterialLineDto)
++  materials?: TaskMaterialLineDto[]
++
++}
+diff --git a/src/modules/tasks/tasks.service.ts b/src/modules/tasks/tasks.service.ts
+index 1a3803b..c9cb1e5 100644
+--- a/src/modules/tasks/tasks.service.ts
++++ b/src/modules/tasks/tasks.service.ts
+@@ -35,6 +35,29 @@ export class TasksService{
+     material:true,
+     thickness:true,
+     color:true,
++    createdBy:{
++      select:{
++        id:true,
++        name:true,
++        color:true,
++        icon:true,
++      },
++    },
++    updatedBy:{
++      select:{
++        id:true,
++        name:true,
++        color:true,
++        icon:true,
++      },
++    },
++    materialLines:{
++      include:{
++        material:true,
++        thickness:true,
++      },
++      orderBy:{ sortOrder:"asc" as const },
++    },
+     workflowSteps:{
+       include:{
+         operator:{
+@@ -71,6 +94,51 @@ export class TasksService{
+   } satisfies Prisma.TaskInclude
+ 
+ 
++  /** Normaliza líneas de material y denormaliza primary + total pieces. */
++  private resolveMaterialLines(dto: {
++    materials?: Array<{ materialId: string; thicknessId: string; pieces: number }>
++    materialId?: string
++    thicknessId?: string
++    pieces?: number
++  }) {
++    const lines =
++      dto.materials && dto.materials.length > 0
++        ? dto.materials.map((l, i) => ({
++            materialId: l.materialId,
++            thicknessId: l.thicknessId,
++            pieces: l.pieces,
++            sortOrder: i,
++          }))
++        : dto.materialId && dto.thicknessId && dto.pieces
++          ? [
++              {
++                materialId: dto.materialId,
++                thicknessId: dto.thicknessId,
++                pieces: dto.pieces,
++                sortOrder: 0,
++              },
++            ]
++          : null
++
++    if (!lines || lines.length === 0) {
++      throw new BadRequestException(
++        "Se requiere al menos un material con espesor y piezas.",
++      )
++    }
++
++    const totalPieces = lines.reduce((s, l) => s + l.pieces, 0)
++    const primary = [...lines].sort((a, b) => b.pieces - a.pieces)[0]
++
++    return {
++      lines,
++      totalPieces,
++      materialId: primary.materialId,
++      thicknessId: primary.thicknessId,
++    }
++  }
++
++
++
+   private withCommentCount<T extends {
+     _count?: { comments: number }
+     workflowSteps?: Array<{ _count?: { comments: number } } & Record<string, unknown>>
+@@ -171,25 +239,30 @@ export class TasksService{
+       }),
+     ])
+ 
++    const resolved = this.resolveMaterialLines(dto)
++
+     const task = await this.prisma.task.create({
+       data: {
+         taskNumber: (lastTask?.taskNumber ?? 0) + 1,
+         projectId: dto.projectId,
+         reference: dto.reference.trim(),
+-        pieces: dto.pieces,
++        pieces: resolved.totalPieces,
+         lotNumber,
+         assemblyCount: dto.assemblyCount,
+         paintKg: dto.paintKg,
+         route: dto.route,
+         priorityId: dto.priorityId,
+-        materialId: dto.materialId,
+-        thicknessId: dto.thicknessId,
++        materialId: resolved.materialId,
++        thicknessId: resolved.thicknessId,
+         colorId: dto.colorId ?? null,
+         plRt: dto.plRt ?? null,
+         deliveryDate: parseDateOnly(dto.deliveryDate ?? null),
+         position: totalTasks + 1,
+         createdById: userId,
+         updatedById: userId,
++        materialLines: {
++          create: resolved.lines,
++        },
+         workflowSteps: {
+           create: buildWorkflow(dto.route),
+         },

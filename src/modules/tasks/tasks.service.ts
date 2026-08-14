@@ -35,6 +35,29 @@ export class TasksService{
     material:true,
     thickness:true,
     color:true,
+    createdBy:{
+      select:{
+        id:true,
+        name:true,
+        color:true,
+        icon:true,
+      },
+    },
+    updatedBy:{
+      select:{
+        id:true,
+        name:true,
+        color:true,
+        icon:true,
+      },
+    },
+    materialLines:{
+      include:{
+        material:true,
+        thickness:true,
+      },
+      orderBy:{ sortOrder:"asc" as const },
+    },
     workflowSteps:{
       include:{
         operator:{
@@ -69,6 +92,51 @@ export class TasksService{
       },
     },
   } satisfies Prisma.TaskInclude
+
+
+  /** Normaliza líneas de material y denormaliza primary + total pieces. */
+  private resolveMaterialLines(dto: {
+    materials?: Array<{ materialId: string; thicknessId: string; pieces: number }>
+    materialId?: string
+    thicknessId?: string
+    pieces?: number
+  }) {
+    const lines =
+      dto.materials && dto.materials.length > 0
+        ? dto.materials.map((l, i) => ({
+            materialId: l.materialId,
+            thicknessId: l.thicknessId,
+            pieces: l.pieces,
+            sortOrder: i,
+          }))
+        : dto.materialId && dto.thicknessId && dto.pieces
+          ? [
+              {
+                materialId: dto.materialId,
+                thicknessId: dto.thicknessId,
+                pieces: dto.pieces,
+                sortOrder: 0,
+              },
+            ]
+          : null
+
+    if (!lines || lines.length === 0) {
+      throw new BadRequestException(
+        "Se requiere al menos un material con espesor y piezas.",
+      )
+    }
+
+    const totalPieces = lines.reduce((s, l) => s + l.pieces, 0)
+    const primary = [...lines].sort((a, b) => b.pieces - a.pieces)[0]
+
+    return {
+      lines,
+      totalPieces,
+      materialId: primary.materialId,
+      thicknessId: primary.thicknessId,
+    }
+  }
+
 
 
   private withCommentCount<T extends {
@@ -171,25 +239,30 @@ export class TasksService{
       }),
     ])
 
+    const resolved = this.resolveMaterialLines(dto)
+
     const task = await this.prisma.task.create({
       data: {
         taskNumber: (lastTask?.taskNumber ?? 0) + 1,
         projectId: dto.projectId,
         reference: dto.reference.trim(),
-        pieces: dto.pieces,
+        pieces: resolved.totalPieces,
         lotNumber,
         assemblyCount: dto.assemblyCount,
         paintKg: dto.paintKg,
         route: dto.route,
         priorityId: dto.priorityId,
-        materialId: dto.materialId,
-        thicknessId: dto.thicknessId,
+        materialId: resolved.materialId,
+        thicknessId: resolved.thicknessId,
         colorId: dto.colorId ?? null,
         plRt: dto.plRt ?? null,
         deliveryDate: parseDateOnly(dto.deliveryDate ?? null),
         position: totalTasks + 1,
         createdById: userId,
         updatedById: userId,
+        materialLines: {
+          create: resolved.lines,
+        },
         workflowSteps: {
           create: buildWorkflow(dto.route),
         },

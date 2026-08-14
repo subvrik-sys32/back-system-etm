@@ -54,6 +54,22 @@ export class ProjectsService{
     },
     stage: true,
     status: true,
+    createdBy: {
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
+      },
+    },
+    updatedBy: {
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
+      },
+    },
     // Conteos agregados para badges del listado (una sola query).
     // NO trae comentarios ni tareas, solo el número.
     // taskCount = tareas ACTIVAS (activeTaskWhere).

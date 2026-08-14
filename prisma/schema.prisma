@@ -284,22 +284,24 @@ model Material {
   deletedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  color     String
-  icon      String
-  tasks     Task[]
+  color         String
+  icon          String
+  tasks         Task[]
+  materialLines TaskMaterialLine[]
 }
 
 model Thickness {
-  id        String    @id @default(uuid())
-  code      String    @unique
-  name      String
-  active    Boolean   @default(true)
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  color     String
-  icon      String
-  tasks     Task[]
+  id            String             @id @default(uuid())
+  code          String             @unique
+  name          String
+  active        Boolean            @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  color         String
+  icon          String
+  tasks         Task[]
+  materialLines TaskMaterialLine[]
 }
 
 model Color {
@@ -401,10 +403,25 @@ model Task {
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   thickness     Thickness      @relation(fields: [thicknessId], references: [id])
   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  materialLines TaskMaterialLine[]
   workflowSteps WorkflowStep[]
   comments      Comment[]
   activityLogs  ActivityLog[]
   notifications Notification[]
+}
+
+model TaskMaterialLine {
+  id          String    @id @default(uuid())
+  taskId      String
+  materialId  String
+  thicknessId String
+  pieces      Int
+  sortOrder   Int       @default(0)
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  material    Material  @relation(fields: [materialId], references: [id])
+  thickness   Thickness @relation(fields: [thicknessId], references: [id])
+
+  @@index([taskId])
 }
 
 model WorkflowStep {

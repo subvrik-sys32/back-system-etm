@@ -14,6 +14,18 @@ import {
   ProcessCode,
 } from "@prisma/client"
 
+import {
+  Type,
+} from "class-transformer"
+
+import {
+  ValidateNested,
+} from "class-validator"
+
+import {
+  TaskMaterialLineDto,
+} from "./task-material-line.dto"
+
 export class CreateTaskDto {
 
   @IsString()
@@ -22,8 +34,9 @@ export class CreateTaskDto {
   @IsString()
   reference!: string
 
+  @IsOptional()
   @Min(1)
-  pieces!: number
+  pieces?: number
 
   @IsOptional()
   @IsNumber()
@@ -55,11 +68,20 @@ export class CreateTaskDto {
   @IsString()
   priorityId!: string
 
+  @IsOptional()
   @IsString()
-  materialId!: string
+  materialId?: string
 
+  @IsOptional()
   @IsString()
-  thicknessId!: string
+  thicknessId?: string
+
+  /** Multi-material: cada línea material+espesor+piezas. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TaskMaterialLineDto)
+  materials?: TaskMaterialLineDto[]
 
   @IsOptional()
   @IsString()
