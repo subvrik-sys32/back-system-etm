@@ -6,110 +6,60 @@ import {
   Logger,
 } from "@nestjs/common"
 
-import {
-  Reflector,
-} from "@nestjs/core"
+import { Reflector } from "@nestjs/core"
 
-import {
-  PERMISSIONS_KEY,
-} from "@/shared/decorators/permissions.decorator"
+import { PERMISSIONS_KEY } from "@/shared/decorators/permissions.decorator"
+import { RoleCode } from "@/core/enums/role-code.enum"
 
 @Injectable()
-export class PermissionsGuard
-  implements CanActivate{
+export class PermissionsGuard implements CanActivate {
+  private readonly logger = new Logger(PermissionsGuard.name)
 
-  private readonly logger=
-    new Logger(
-      PermissionsGuard.name,
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext) {
+    const start = performance.now()
+
+    const requiredPermissions =
+      this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+
+    if (!requiredPermissions || requiredPermissions.length === 0) {
+      this.logger.debug(
+        `PermissionsGuard ${(performance.now() - start).toFixed(1)} ms`,
+      )
+      return true
+    }
+
+    const request = context.switchToHttp().getRequest()
+    const user = request.user
+
+    if (!user) {
+      throw new ForbiddenException()
+    }
+
+    const roles: string[] = user.roles ?? []
+    if (roles.includes(RoleCode.ADMIN) || roles.includes("ADMIN")) {
+      this.logger.debug(
+        `PermissionsGuard ADMIN bypass ${(performance.now() - start).toFixed(1)} ms`,
+      )
+      return true
+    }
+
+    const permissions: string[] = user.permissions ?? []
+    const hasPermission = requiredPermissions.every(permission =>
+      permissions.includes(permission),
     )
 
-  constructor(
-
-    private readonly reflector:
-      Reflector,
-
-  ){}
-
-  canActivate(
-    context:ExecutionContext,
-  ){
-
-    const start=
-      performance.now()
-
-    const requiredPermissions=
-      this.reflector.getAllAndOverride<string[]>(
-
-        PERMISSIONS_KEY,
-
-        [
-
-          context.getHandler(),
-
-          context.getClass(),
-
-        ],
-
-      )
-
-    if(
-
-      !requiredPermissions ||
-
-      requiredPermissions.length===0
-
-    ){
-
-      this.logger.debug(
-        `PermissionsGuard ${(performance.now()-start).toFixed(1)} ms`,
-      )
-
-      return true
-
-    }
-
-    const request=
-      context
-        .switchToHttp()
-        .getRequest()
-
-    const user=
-      request.user
-
-    if(!user){
-
-      throw new ForbiddenException()
-
-    }
-
-    const permissions:string[]=
-      user.permissions??[]
-
-    const hasPermission=
-      requiredPermissions.every(
-
-        permission=>
-
-          permissions.includes(
-            permission,
-          ),
-
-      )
-
-    if(!hasPermission){
-
-      throw new ForbiddenException(
-        "Insufficient permissions",
-      )
-
+    if (!hasPermission) {
+      throw new ForbiddenException("Insufficient permissions")
     }
 
     this.logger.debug(
-      `PermissionsGuard ${(performance.now()-start).toFixed(1)} ms`,
+      `PermissionsGuard ${(performance.now() - start).toFixed(1)} ms`,
     )
-
     return true
-
   }
-
 }
