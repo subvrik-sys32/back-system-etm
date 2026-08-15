@@ -27,10 +27,6 @@ export type NestRunResponse = {
   durationMs?: number
 }
 
-/**
- * mode = estrategia de placement (fast AABB / precise).
- * preparePieces acelera colision; rehydrate restaura geometria completa.
- */
 @Injectable()
 export class NestingRunService {
   run(body: NestRunRequest): NestRunResponse {
@@ -73,7 +69,6 @@ export class NestingRunService {
         searchStep: body.options.searchStep,
       })
 
-      // Siempre true-shape en la respuesta (agujeros desde body.pieces)
       const sheets = rehydrateNestedSheets(rawSheets, body.pieces)
 
       return {

@@ -1,11 +1,7 @@
 /**
  * Pre-proceso ANTES de pack.
- *
- * Contrato (alineado a AI-Nesting / NestingEngine.cpp):
- * - La geometría de placement y de dibujo es la misma.
- * - fast NO destruye outline ni subEntities: el heuristic ya usa AABB
- *   (boundingRect) para colisión; los huecos solo pesan al dibujar/exportar.
- * - precise: Douglas-Peucker + tope de features para polígonos densos.
+ * fast  → identidad (geom completa; speed = AABB en heuristic).
+ * precise → Douglas-Peucker + tope de features.
  */
 import type {
   NestingPiece,
@@ -13,8 +9,8 @@ import type {
   Point2D,
 } from '../nesting/engine/types'
 
-const MAX_OUTLINE_POINTS_PRECISE = 48
-const MAX_SUB_ENTITIES_PRECISE = 64
+const MAX_OUTLINE_POINTS_PRECISE = 64
+const MAX_SUB_ENTITIES_PRECISE = 80
 const DP_EPSILON_MM = 0.35
 
 function dist2(a: Point2D, b: Point2D): number {
@@ -92,46 +88,8 @@ export function simplifyOutline(
   return { points: simplified }
 }
 
-/** @deprecated solo util de depuración; no usar en el path de pack. */
-export function outlineToBBoxRect(outline: PieceOutline): PieceOutline {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const p of outline.points) {
-    if (p.x < minX) minX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.x > maxX) maxX = p.x
-    if (p.y > maxY) maxY = p.y
-  }
-  if (!Number.isFinite(minX)) {
-    return {
-      points: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 1, y: 1 },
-        { x: 0, y: 1 },
-        { x: 0, y: 0 },
-      ],
-    }
-  }
-  return {
-    points: [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY },
-      { x: minX, y: minY },
-    ],
-  }
-}
-
 export type PrepareMode = 'fast' | 'precise'
 
-/**
- * fast  → identidad (mismo modelo que AI-Nesting Rapido: AABB search, geom completa).
- * precise → simplify outlines densos; no borrar huecos.
- */
 export function preparePiecesForPack(
   pieces: NestingPiece[],
   mode: PrepareMode = 'fast',
@@ -148,7 +106,6 @@ export function preparePiecesForPack(
         ...s,
         outline: simplifyOutline(s.outline),
       }))
-
     return {
       ...p,
       outline,

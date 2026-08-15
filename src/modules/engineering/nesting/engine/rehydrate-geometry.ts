@@ -1,9 +1,6 @@
 /**
- * Rehidrata outline + subEntities con el MISMO pipeline que
- * RectangleHeuristicStrategy / NestingEngine.cpp:
- *   scale(opcional) → rotateAround(center) → align(-bounds.topLeft) → translate(x,y)
- *
- * Si placePiece ya dejó subEntities, se respeta el placement tal cual.
+ * Si placePiece ya dejó subEntities, no toca.
+ * Si faltan (path legacy), reaplica rotateAround → align → translate.
  */
 import {
   applyToOutline,
@@ -15,21 +12,14 @@ import {
   IDENTITY,
   type Transform2D,
 } from './geometry'
-import type {
-  NestedSheet,
-  NestingPiece,
-  PlacedPiece,
-} from './types'
+import type { NestedSheet, NestingPiece, PlacedPiece } from './types'
 
 function basePieceId(id: string): string {
   const i = id.indexOf('#')
   return i >= 0 ? id.slice(0, i) : id
 }
 
-function placementTransform(
-  src: NestingPiece,
-  placed: PlacedPiece,
-): Transform2D {
+function placementTransform(src: NestingPiece, placed: PlacedPiece): Transform2D {
   const angle = placed.angle ?? 0
   const bounds = boundingRect(src.outline)
   const center = rectCenter(bounds)
@@ -45,26 +35,19 @@ export function rehydrateNestedSheets(
   sources: NestingPiece[],
 ): NestedSheet[] {
   const byId = new Map<string, NestingPiece>()
-  for (const p of sources) {
-    byId.set(p.id, p)
-  }
+  for (const p of sources) byId.set(p.id, p)
 
   return sheets.map((sheet) => ({
     ...sheet,
     pieces: sheet.pieces.map((placed) => {
-      // placePiece ya transformó subEntities → no tocar
-      if (placed.subEntities && placed.subEntities.length > 0) {
-        return placed
-      }
+      if (placed.subEntities && placed.subEntities.length > 0) return placed
 
       const src =
-        byId.get(placed.pieceId) ??
-        byId.get(basePieceId(placed.pieceId))
-
+        byId.get(placed.pieceId) ?? byId.get(basePieceId(placed.pieceId))
+      if (!src?.subEntities?.length && !src) return placed
       if (!src) return placed
 
       const m = placementTransform(src, placed)
-
       return {
         ...placed,
         outline: applyToOutline(m, src.outline),
