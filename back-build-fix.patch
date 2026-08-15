@@ -1,0 +1,13 @@
+diff --git a/src/modules/engineering/cad/rich/pdf-parser.ts b/src/modules/engineering/cad/rich/pdf-parser.ts
+index 51f79c2..7887754 100644
+--- a/src/modules/engineering/cad/rich/pdf-parser.ts
++++ b/src/modules/engineering/cad/rich/pdf-parser.ts
+@@ -166,7 +166,7 @@ export async function parsePdf(fileName: string, data: ArrayBuffer): Promise<Cad
+   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+   const { getDocument, OPS } = pdfjs
+ 
+-  const doc = await getDocument({ data, useSystemFonts: true, disableWorker: true }).promise
++  const doc = await getDocument({ data, useSystemFonts: true } as any).promise
+ 
+   const allEntities: CadEntity[] = []
+ 
