@@ -1,42 +1,67 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
-import DxfParser from 'dxf-parser'
-import { parseDxfGeometry } from '../pdf/dxf-geometry-parser'
-import { dxfPiecesToNestingPieces } from './dxf-to-nesting-pieces'
+import { readCadFile, isSupportedCadFile } from '../cad/rich/cad-reader'
 import type { NestingPiece } from '../nesting/engine/types'
+import type { CadData } from '../cad/rich/types'
 
 export type CadParseResponse = {
   pieces: NestingPiece[]
   pieceCount: number
-  layout?: { width: number; height: number }
+  width?: number
+  height?: number
+  valid: boolean
 }
 
+function cadDataToNestingPiece(id: string, cad: CadData): NestingPiece {
+  return {
+    id,
+    outline: cad.outline,
+    subEntities: cad.entities.map((e) => ({
+      outline: e.outline,
+      color: e.color,
+      layer: e.layer,
+    })),
+    quantity: 1,
+  }
+}
+
+/**
+ * Parser CAD rico — mismo pipeline que el front (dxf-parser / geo-parser
+ * / chain-fragments / classify-dxf-color). No usa parseDxfGeometry del reporte.
+ */
 @Injectable()
 export class CadParseService {
   private readonly logger = new Logger(CadParseService.name)
 
-  parseDxfBuffer(buffer: Buffer): CadParseResponse {
-    let dxf: any
-    try {
-      const parser = new DxfParser()
-      dxf = parser.parseSync(buffer.toString('utf-8'))
-    } catch (err) {
+  parseFile(fileName: string, content: string): CadParseResponse {
+    if (!isSupportedCadFile(fileName)) {
       throw new BadRequestException(
-        `DXF inválido: ${err instanceof Error ? err.message : 'parse error'}`,
+        `Formato no soportado: ${fileName}. Use .dxf o .geo`,
       )
     }
-    const entities: any[] = dxf?.entities ?? []
-    if (!entities.length) {
-      throw new BadRequestException('El DXF no contiene entidades')
+    const cad = readCadFile(fileName, content)
+    if (!cad.valid || cad.outline.points.length === 0) {
+      throw new BadRequestException(
+        'El archivo no contiene geometría válida de corte',
+      )
     }
-    const geometry = parseDxfGeometry(entities)
-    const pieces = dxfPiecesToNestingPieces(geometry.pieces)
-    this.logger.log(`CAD parse: ${pieces.length} piezas`)
+    const piece = cadDataToNestingPiece(
+      fileName.replace(/\.[^.]+$/, '') || 'piece',
+      cad,
+    )
+    this.logger.log(
+      `CAD rich parse ${fileName}: entities=${cad.entities.length} ` +
+        `${cad.width.toFixed(1)}x${cad.height.toFixed(1)}`,
+    )
     return {
-      pieces,
-      pieceCount: pieces.reduce((n, p) => n + (p.quantity ?? 1), 0),
-      layout: geometry.layout
-        ? { width: geometry.layout.width, height: geometry.layout.height }
-        : undefined,
+      pieces: [piece],
+      pieceCount: 1,
+      width: cad.width,
+      height: cad.height,
+      valid: true,
     }
+  }
+
+  parseDxfBuffer(buffer: Buffer, fileName = 'upload.dxf'): CadParseResponse {
+    return this.parseFile(fileName, buffer.toString('utf-8'))
   }
 }

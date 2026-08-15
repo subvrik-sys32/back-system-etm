@@ -71,6 +71,6 @@ export class NestingRunController {
     if (!file?.buffer?.length) {
       return { error: 'file required' }
     }
-    return this.cadParse.parseDxfBuffer(file.buffer)
+    return this.cadParse.parseDxfBuffer(file.buffer, file.originalname || 'upload.dxf')
   }
 }
