@@ -18,14 +18,10 @@ export type NestJobRecord = {
   result?: NestRunResponse
 }
 
-/**
- * Jobs in-memory (proceso Nest). Suficiente para progress real en un solo nodo.
- * Para multi-instancia: Redis/Bull en una fase posterior.
- */
 @Injectable()
 export class NestingJobService {
   private readonly jobs = new Map<string, NestJobRecord>()
-  private readonly controllers = new Map<string, AbortController>()
+  private readonly flags = new Map<string, { cancelled: boolean }>()
 
   constructor(private readonly nesting: NestingRunService) {}
 
@@ -40,13 +36,9 @@ export class NestingJobService {
       updatedAt: now,
     }
     this.jobs.set(id, rec)
-
-    const ac = new AbortController()
-    this.controllers.set(id, ac)
-
-    // No bloquear el request HTTP
-    setImmediate(() => this.execute(id, body, ac))
-
+    const flag = { cancelled: false }
+    this.flags.set(id, flag)
+    setImmediate(() => this.execute(id, body, flag))
     return rec
   }
 
@@ -59,43 +51,42 @@ export class NestingJobService {
   cancel(id: string): NestJobRecord {
     const rec = this.get(id)
     if (rec.status === 'done' || rec.status === 'error') return rec
-    this.controllers.get(id)?.abort()
+    const flag = this.flags.get(id)
+    if (flag) flag.cancelled = true
     rec.status = 'cancelled'
     rec.updatedAt = Date.now()
     return rec
   }
 
-  private execute(id: string, body: NestRunRequest, ac: AbortController) {
+  private execute(
+    id: string,
+    body: NestRunRequest,
+    flag: { cancelled: boolean },
+  ) {
     const rec = this.jobs.get(id)
     if (!rec) return
-    if (ac.signal.aborted) {
+    if (flag.cancelled) {
       rec.status = 'cancelled'
       rec.updatedAt = Date.now()
       return
     }
 
     rec.status = 'running'
-    rec.progress = 0.05
+    rec.progress = 0.02
     rec.updatedAt = Date.now()
 
-    const tick = setInterval(() => {
-      if (rec.status !== 'running') return
-      if (rec.progress < 0.9) {
-        rec.progress = rec.progress + (0.9 - rec.progress) * 0.15
-        rec.updatedAt = Date.now()
-      }
-    }, 200)
-
     try {
-      // El motor actual es sync; el progress simulado cubre la espera.
-      // Cuando optimize acepte signal, se cablea cancel real mid-pack.
-      if (ac.signal.aborted) {
+      const result = this.nesting.run(body, {
+        signal: flag,
+        onProgress: (p) => {
+          if (flag.cancelled) return
+          rec.progress = Math.min(0.99, Math.max(0.02, p))
+          rec.updatedAt = Date.now()
+        },
+      })
+      if (flag.cancelled) {
         rec.status = 'cancelled'
-        return
-      }
-      const result = this.nesting.run(body)
-      if (ac.signal.aborted) {
-        rec.status = 'cancelled'
+        rec.updatedAt = Date.now()
         return
       }
       rec.result = result
@@ -103,13 +94,15 @@ export class NestingJobService {
       rec.status = 'done'
       rec.updatedAt = Date.now()
     } catch (err) {
-      rec.status = 'error'
-      rec.error = err instanceof Error ? err.message : 'Nesting failed'
+      if (flag.cancelled) {
+        rec.status = 'cancelled'
+      } else {
+        rec.status = 'error'
+        rec.error = err instanceof Error ? err.message : 'Nesting failed'
+      }
       rec.updatedAt = Date.now()
     } finally {
-      clearInterval(tick)
-      this.controllers.delete(id)
-      // GC suave: borrar jobs viejos (>1h)
+      this.flags.delete(id)
       const hourAgo = Date.now() - 3600_000
       for (const [jid, j] of this.jobs) {
         if (j.updatedAt < hourAgo) this.jobs.delete(jid)

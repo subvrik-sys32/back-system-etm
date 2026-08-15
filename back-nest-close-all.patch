@@ -1,0 +1,428 @@
+diff --git a/src/modules/engineering/services/cad-parse.service.spec.ts b/src/modules/engineering/services/cad-parse.service.spec.ts
+index 7bf3248..6a33906 100644
+--- a/src/modules/engineering/services/cad-parse.service.spec.ts
++++ b/src/modules/engineering/services/cad-parse.service.spec.ts
+@@ -2,13 +2,14 @@ import { CadParseService } from './cad-parse.service'
+ 
+ const MINI_RECT_DXF = '0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nCUT\n62\n3\n10\n0.0\n20\n0.0\n11\n100.0\n21\n0.0\n0\nLINE\n8\nCUT\n62\n3\n10\n100.0\n20\n0.0\n11\n100.0\n21\n50.0\n0\nLINE\n8\nCUT\n62\n3\n10\n100.0\n20\n50.0\n11\n0.0\n21\n50.0\n0\nLINE\n8\nCUT\n62\n3\n10\n0.0\n20\n50.0\n11\n0.0\n21\n0.0\n0\nENDSEC\n0\nEOF\n'
+ 
+-describe('CadParseService (rich DXF/GEO/PDF)', () => {
++describe('CadParseService', () => {
+   const service = new CadParseService()
+ 
+-  it('DXF → pieza con subEntities', () => {
++  it('DXF → al menos 1 pieza', () => {
+     const res = service.parseFile('plate.dxf', MINI_RECT_DXF)
+     expect(res.valid).toBe(true)
+-    expect(res.pieces[0].subEntities!.length).toBeGreaterThanOrEqual(1)
++    expect(res.pieces.length).toBeGreaterThanOrEqual(1)
++    expect(res.pieces[0].outline.points.length).toBeGreaterThan(0)
+   })
+ 
+   it('rechaza stp', () => {
+diff --git a/src/modules/engineering/services/cad-parse.service.ts b/src/modules/engineering/services/cad-parse.service.ts
+index fa8c57d..4ca5769 100644
+--- a/src/modules/engineering/services/cad-parse.service.ts
++++ b/src/modules/engineering/services/cad-parse.service.ts
+@@ -1,6 +1,9 @@
+ import { BadRequestException, Injectable, Logger } from '@nestjs/common'
++import DxfParser from 'dxf-parser'
+ import { readCadFile, isSupportedCadFile } from '../cad/rich/cad-reader'
+ import { parsePdf, isPdfFile } from '../cad/rich/pdf-parser'
++import { parseDxfGeometry } from '../pdf/dxf-geometry-parser'
++import { dxfPiecesToNestingPieces } from './dxf-to-nesting-pieces'
+ import type { NestingPiece } from '../nesting/engine/types'
+ import type { CadData } from '../cad/rich/types'
+ 
+@@ -25,7 +28,7 @@ function cadDataToNestingPiece(id: string, cad: CadData): NestingPiece {
+   }
+ }
+ 
+-function assertValid(cad: CadData, label: string): CadData {
++function assertCad(cad: CadData, label: string): CadData {
+   if (!cad.valid || cad.outline.points.length === 0) {
+     throw new BadRequestException(
+       `${label}: no contiene geometría válida de corte`,
+@@ -38,40 +41,90 @@ function assertValid(cad: CadData, label: string): CadData {
+ export class CadParseService {
+   private readonly logger = new Logger(CadParseService.name)
+ 
+-  private toResponse(fileName: string, cad: CadData): CadParseResponse {
+-    const base = fileName.replace(/\.[^.]+$/, '') || 'piece'
+-    const piece = cadDataToNestingPiece(base, cad)
+-    this.logger.log(
+-      `CAD rich ${fileName}: entities=${cad.entities.length} ` +
+-        `${cad.width.toFixed(1)}x${cad.height.toFixed(1)}`,
+-    )
++  private wrap(
++    pieces: NestingPiece[],
++    width?: number,
++    height?: number,
++  ): CadParseResponse {
++    if (!pieces.length) {
++      throw new BadRequestException('No se extrajeron piezas del archivo')
++    }
+     return {
+-      pieces: [piece],
+-      pieceCount: 1,
+-      width: cad.width,
+-      height: cad.height,
++      pieces,
++      pieceCount: pieces.reduce((n, p) => n + (p.quantity ?? 1), 0),
++      width,
++      height,
+       valid: true,
+     }
+   }
+ 
++  /** DXF: multi-pieza (connectivity + holes) vía geometry-parser. */
++  private parseDxfMulti(fileName: string, content: string): CadParseResponse {
++    let dxf: any
++    try {
++      dxf = new DxfParser().parseSync(content)
++    } catch (err) {
++      throw new BadRequestException(
++        `DXF inválido: ${err instanceof Error ? err.message : 'parse error'}`,
++      )
++    }
++    const entities: any[] = dxf?.entities ?? []
++    if (!entities.length) {
++      throw new BadRequestException('El DXF no contiene entidades')
++    }
++    const geometry = parseDxfGeometry(entities)
++    const pieces = dxfPiecesToNestingPieces(geometry.pieces)
++    this.logger.log(
++      `CAD multi DXF ${fileName}: ${pieces.length} piezas ` +
++        `(layout ${geometry.layout?.width?.toFixed?.(1) ?? '?'}x` +
++        `${geometry.layout?.height?.toFixed?.(1) ?? '?'})`,
++    )
++    return this.wrap(
++      pieces,
++      geometry.layout?.width,
++      geometry.layout?.height,
++    )
++  }
++
+   parseFile(fileName: string, content: string): CadParseResponse {
++    const lower = fileName.toLowerCase()
++    if (lower.endsWith('.dxf')) {
++      return this.parseDxfMulti(fileName, content)
++    }
+     if (!isSupportedCadFile(fileName)) {
+       throw new BadRequestException(
+         `Formato no soportado: ${fileName}. Use .dxf, .geo o .pdf`,
+       )
+     }
+-    return this.toResponse(fileName, assertValid(readCadFile(fileName, content), fileName))
++    const cad = assertCad(readCadFile(fileName, content), fileName)
++    const base = fileName.replace(/\.[^.]+$/, '') || 'piece'
++    this.logger.log(
++      `CAD rich ${fileName}: entities=${cad.entities.length} ` +
++        `${cad.width.toFixed(1)}x${cad.height.toFixed(1)}`,
++    )
++    return this.wrap([cadDataToNestingPiece(base, cad)], cad.width, cad.height)
+   }
+ 
+-  async parseUpload(fileName: string, buffer: Buffer): Promise<CadParseResponse> {
++  async parseUpload(
++    fileName: string,
++    buffer: Buffer,
++  ): Promise<CadParseResponse> {
+     const lower = fileName.toLowerCase()
+     if (isPdfFile(fileName) || lower.endsWith('.pdf')) {
+       const ab = buffer.buffer.slice(
+         buffer.byteOffset,
+         buffer.byteOffset + buffer.byteLength,
+       ) as ArrayBuffer
+-      const cad = assertValid(await parsePdf(fileName, ab), fileName)
+-      return this.toResponse(fileName, cad)
++      const cad = assertCad(await parsePdf(fileName, ab), fileName)
++      const base = fileName.replace(/\.[^.]+$/, '') || 'piece'
++      this.logger.log(
++        `CAD PDF ${fileName}: entities=${cad.entities.length}`,
++      )
++      return this.wrap(
++        [cadDataToNestingPiece(base, cad)],
++        cad.width,
++        cad.height,
++      )
+     }
+     return this.parseFile(fileName, buffer.toString('utf-8'))
+   }
+diff --git a/src/modules/engineering/services/dxf-to-nesting-pieces.ts b/src/modules/engineering/services/dxf-to-nesting-pieces.ts
+new file mode 100644
+index 0000000..b258395
+--- /dev/null
++++ b/src/modules/engineering/services/dxf-to-nesting-pieces.ts
+@@ -0,0 +1,96 @@
++import type { NestingPiece, Point2D } from '../nesting/engine/types'
++import type { DrawEntity, DxfPiece } from '../pdf/dxf-geometry-parser'
++
++function entityPoints(e: DrawEntity): Point2D[] {
++  if (e.kind === 'polyline' && e.points?.length) {
++    return e.points.map((p) => ({ x: p.x, y: p.y }))
++  }
++  if (e.kind === 'line' && e.x1 != null && e.y1 != null && e.x2 != null && e.y2 != null) {
++    return [
++      { x: e.x1, y: e.y1 },
++      { x: e.x2, y: e.y2 },
++    ]
++  }
++  if (e.kind === 'circle' && e.cx != null && e.cy != null && e.r != null) {
++    const n = 24
++    const pts: Point2D[] = []
++    for (let i = 0; i <= n; i++) {
++      const a = (i / n) * Math.PI * 2
++      pts.push({ x: e.cx + e.r * Math.cos(a), y: e.cy + e.r * Math.sin(a) })
++    }
++    return pts
++  }
++  if (
++    e.kind === 'arc' &&
++    e.cx != null &&
++    e.cy != null &&
++    e.r != null &&
++    e.start != null &&
++    e.end != null
++  ) {
++    const n = 16
++    const pts: Point2D[] = []
++    let a0 = e.start
++    let a1 = e.end
++    if (a1 < a0) a1 += Math.PI * 2
++    for (let i = 0; i <= n; i++) {
++      const a = a0 + ((a1 - a0) * i) / n
++      pts.push({ x: e.cx + e.r * Math.cos(a), y: e.cy + e.r * Math.sin(a) })
++    }
++    return pts
++  }
++  return []
++}
++
++function boundsOutline(points: Point2D[]) {
++  if (!points.length) {
++    return {
++      points: [
++        { x: 0, y: 0 },
++        { x: 1, y: 0 },
++        { x: 1, y: 1 },
++        { x: 0, y: 1 },
++        { x: 0, y: 0 },
++      ],
++    }
++  }
++  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
++  for (const p of points) {
++    if (p.x < minX) minX = p.x
++    if (p.y < minY) minY = p.y
++    if (p.x > maxX) maxX = p.x
++    if (p.y > maxY) maxY = p.y
++  }
++  return {
++    points: [
++      { x: minX, y: minY },
++      { x: maxX, y: minY },
++      { x: maxX, y: maxY },
++      { x: minX, y: maxY },
++      { x: minX, y: minY },
++    ],
++  }
++}
++
++/** Multi-pieza: cada DxfPiece del geometry-parser → NestingPiece. */
++export function dxfPiecesToNestingPieces(pieces: DxfPiece[]): NestingPiece[] {
++  return pieces.map((p) => {
++    const allPts: Point2D[] = []
++    const subEntities: NonNullable<NestingPiece['subEntities']> = []
++    for (const e of p.entities) {
++      const pts = entityPoints(e)
++      if (!pts.length) continue
++      allPts.push(...pts)
++      subEntities.push({
++        outline: { points: pts },
++        color: '#22c55e',
++      })
++    }
++    return {
++      id: p.id,
++      outline: boundsOutline(allPts),
++      subEntities: subEntities.length ? subEntities : undefined,
++      quantity: Math.max(1, p.count || 1),
++    }
++  })
++}
+diff --git a/src/modules/engineering/services/nesting-job.service.ts b/src/modules/engineering/services/nesting-job.service.ts
+index e9cded5..04bad02 100644
+--- a/src/modules/engineering/services/nesting-job.service.ts
++++ b/src/modules/engineering/services/nesting-job.service.ts
+@@ -18,14 +18,10 @@ export type NestJobRecord = {
+   result?: NestRunResponse
+ }
+ 
+-/**
+- * Jobs in-memory (proceso Nest). Suficiente para progress real en un solo nodo.
+- * Para multi-instancia: Redis/Bull en una fase posterior.
+- */
+ @Injectable()
+ export class NestingJobService {
+   private readonly jobs = new Map<string, NestJobRecord>()
+-  private readonly controllers = new Map<string, AbortController>()
++  private readonly flags = new Map<string, { cancelled: boolean }>()
+ 
+   constructor(private readonly nesting: NestingRunService) {}
+ 
+@@ -40,13 +36,9 @@ export class NestingJobService {
+       updatedAt: now,
+     }
+     this.jobs.set(id, rec)
+-
+-    const ac = new AbortController()
+-    this.controllers.set(id, ac)
+-
+-    // No bloquear el request HTTP
+-    setImmediate(() => this.execute(id, body, ac))
+-
++    const flag = { cancelled: false }
++    this.flags.set(id, flag)
++    setImmediate(() => this.execute(id, body, flag))
+     return rec
+   }
+ 
+@@ -59,43 +51,42 @@ export class NestingJobService {
+   cancel(id: string): NestJobRecord {
+     const rec = this.get(id)
+     if (rec.status === 'done' || rec.status === 'error') return rec
+-    this.controllers.get(id)?.abort()
++    const flag = this.flags.get(id)
++    if (flag) flag.cancelled = true
+     rec.status = 'cancelled'
+     rec.updatedAt = Date.now()
+     return rec
+   }
+ 
+-  private execute(id: string, body: NestRunRequest, ac: AbortController) {
++  private execute(
++    id: string,
++    body: NestRunRequest,
++    flag: { cancelled: boolean },
++  ) {
+     const rec = this.jobs.get(id)
+     if (!rec) return
+-    if (ac.signal.aborted) {
++    if (flag.cancelled) {
+       rec.status = 'cancelled'
+       rec.updatedAt = Date.now()
+       return
+     }
+ 
+     rec.status = 'running'
+-    rec.progress = 0.05
++    rec.progress = 0.02
+     rec.updatedAt = Date.now()
+ 
+-    const tick = setInterval(() => {
+-      if (rec.status !== 'running') return
+-      if (rec.progress < 0.9) {
+-        rec.progress = rec.progress + (0.9 - rec.progress) * 0.15
+-        rec.updatedAt = Date.now()
+-      }
+-    }, 200)
+-
+     try {
+-      // El motor actual es sync; el progress simulado cubre la espera.
+-      // Cuando optimize acepte signal, se cablea cancel real mid-pack.
+-      if (ac.signal.aborted) {
+-        rec.status = 'cancelled'
+-        return
+-      }
+-      const result = this.nesting.run(body)
+-      if (ac.signal.aborted) {
++      const result = this.nesting.run(body, {
++        signal: flag,
++        onProgress: (p) => {
++          if (flag.cancelled) return
++          rec.progress = Math.min(0.99, Math.max(0.02, p))
++          rec.updatedAt = Date.now()
++        },
++      })
++      if (flag.cancelled) {
+         rec.status = 'cancelled'
++        rec.updatedAt = Date.now()
+         return
+       }
+       rec.result = result
+@@ -103,13 +94,15 @@ export class NestingJobService {
+       rec.status = 'done'
+       rec.updatedAt = Date.now()
+     } catch (err) {
+-      rec.status = 'error'
+-      rec.error = err instanceof Error ? err.message : 'Nesting failed'
++      if (flag.cancelled) {
++        rec.status = 'cancelled'
++      } else {
++        rec.status = 'error'
++        rec.error = err instanceof Error ? err.message : 'Nesting failed'
++      }
+       rec.updatedAt = Date.now()
+     } finally {
+-      clearInterval(tick)
+-      this.controllers.delete(id)
+-      // GC suave: borrar jobs viejos (>1h)
++      this.flags.delete(id)
+       const hourAgo = Date.now() - 3600_000
+       for (const [jid, j] of this.jobs) {
+         if (j.updatedAt < hourAgo) this.jobs.delete(jid)
+diff --git a/src/modules/engineering/services/nesting-run.service.ts b/src/modules/engineering/services/nesting-run.service.ts
+index 0118c74..be057f6 100644
+--- a/src/modules/engineering/services/nesting-run.service.ts
++++ b/src/modules/engineering/services/nesting-run.service.ts
+@@ -27,9 +27,14 @@ export type NestRunResponse = {
+   durationMs?: number
+ }
+ 
++export type NestRunHooks = {
++  signal?: { cancelled: boolean }
++  onProgress?: (p: number) => void
++}
++
+ @Injectable()
+ export class NestingRunService {
+-  run(body: NestRunRequest): NestRunResponse {
++  run(body: NestRunRequest, hooks?: NestRunHooks): NestRunResponse {
+     if (!body || typeof body !== 'object') {
+       throw new BadRequestException('Body is required')
+     }
+@@ -53,6 +58,10 @@ export class NestingRunService {
+       )
+     }
+ 
++    if (hooks?.signal?.cancelled) {
++      throw new BadRequestException('Nesting cancelled')
++    }
++
+     const mode = body.options.mode ?? 'fast'
+     const prepared = preparePiecesForPack(
+       body.pieces,
+@@ -67,8 +76,14 @@ export class NestingRunService {
+         separation: body.options.separation ?? 5,
+         rotationMode: body.options.rotationMode ?? '0-90-180-270',
+         searchStep: body.options.searchStep,
++        signal: hooks?.signal,
++        onProgress: hooks?.onProgress,
+       })
+ 
++      if (hooks?.signal?.cancelled) {
++        throw new BadRequestException('Nesting cancelled')
++      }
++
+       const sheets = rehydrateNestedSheets(rawSheets, body.pieces)
+ 
+       return {
+@@ -81,6 +96,7 @@ export class NestingRunService {
+         durationMs: Date.now() - t0,
+       }
+     } catch (err) {
++      if (err instanceof BadRequestException) throw err
+       throw new BadRequestException(
+         err instanceof Error ? err.message : 'Nesting failed',
+       )

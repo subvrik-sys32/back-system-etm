@@ -27,9 +27,14 @@ export type NestRunResponse = {
   durationMs?: number
 }
 
+export type NestRunHooks = {
+  signal?: { cancelled: boolean }
+  onProgress?: (p: number) => void
+}
+
 @Injectable()
 export class NestingRunService {
-  run(body: NestRunRequest): NestRunResponse {
+  run(body: NestRunRequest, hooks?: NestRunHooks): NestRunResponse {
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('Body is required')
     }
@@ -53,6 +58,10 @@ export class NestingRunService {
       )
     }
 
+    if (hooks?.signal?.cancelled) {
+      throw new BadRequestException('Nesting cancelled')
+    }
+
     const mode = body.options.mode ?? 'fast'
     const prepared = preparePiecesForPack(
       body.pieces,
@@ -67,7 +76,13 @@ export class NestingRunService {
         separation: body.options.separation ?? 5,
         rotationMode: body.options.rotationMode ?? '0-90-180-270',
         searchStep: body.options.searchStep,
+        signal: hooks?.signal,
+        onProgress: hooks?.onProgress,
       })
+
+      if (hooks?.signal?.cancelled) {
+        throw new BadRequestException('Nesting cancelled')
+      }
 
       const sheets = rehydrateNestedSheets(rawSheets, body.pieces)
 
@@ -81,6 +96,7 @@ export class NestingRunService {
         durationMs: Date.now() - t0,
       }
     } catch (err) {
+      if (err instanceof BadRequestException) throw err
       throw new BadRequestException(
         err instanceof Error ? err.message : 'Nesting failed',
       )
