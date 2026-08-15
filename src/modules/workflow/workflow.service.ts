@@ -147,73 +147,52 @@ export class WorkflowService {
       step.status,
     )
 
-    // Si se está asignando un operario, verificamos que no esté
-    // trabajando en otro proceso activo (PROGRESS) al mismo tiempo.
-    if (dto.operatorId) {
+    // Un operario PUEDE estar en PROGRESS en una tarea y seguir
+    // asignado (sin iniciar) en otras. El conflicto de "ya trabaja
+    // en otro proceso" solo aplica al *iniciar* (start), no al
+    // setear operatorId desde el select de la fila.
 
-      const activeStep =
-        await this.prisma.workflowStep.findFirst({
+    // Asignación desde la fila (ProcessOperatorCell): NO notifica.
+    // Solo TaskAreaPanel / convocatoria (summon) manda notificación
+    // al operario. Si cambia el operario o se limpia:
+    //  - se retira la noti de convocatoria del operario anterior
+    //    (si había assignedById / invitacion)
+    //  - se limpia assignedById: ya no es "me lo convocaron", es
+    //    asignación directa de fila (sin aviso).
+    const operatorChanging =
+      dto.operatorId !== undefined && dto.operatorId !== step.operatorId
 
-          where: {
-            operatorId: dto.operatorId,
-            status: WorkflowStatus.PROGRESS,
-            id: { not: id },
-            task: {
-              deletedAt: null,
-            },
-          },
+    const patch: Record<string, unknown> = {
+      ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
+      ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
+      ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
+      ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
+    }
 
-          select: {
-            id: true,
-            processCode: true,
-          },
+    if (operatorChanging) {
+      // Quitar rastro de convocatoria previa sobre este step.
+      patch.assignedById = null
+      patch.invitedOperatorId = null
+      patch.invitedById = null
+      patch.invitedAt = null
 
-        })
+      const previousRecipient =
+        step.invitedOperatorId ??
+        (step.assignedById ? step.operatorId : null)
 
-      if (activeStep) {
-
-        throw new BadRequestException(
-          "El operario ya está trabajando en otro proceso activo.",
-        )
-
+      if (previousRecipient) {
+        await this.notifications
+          .retractTaskAssignment(step.id, previousRecipient)
+          .catch(() => {})
       }
-
     }
 
     const result = await updateWorkflowStep(
       this.prisma,
       this.operatorCache,
       id,
-      {
-        ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
-        ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
-        ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
-        ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
-      },
+      patch,
     )
-
-    // Antes solo "Convocar" (summon) avisaba al operario asignado —
-    // este PATCH directo (ProcessOperatorCell, el selector inline
-    // al lado de la tarea) asigna igual pero nunca notificaba a
-    // nadie. Solo cuando de verdad cambia a un operario DISTINTO
-    // (no un re-guardado del mismo, no un vaciado a null).
-    if (
-      dto.operatorId &&
-      dto.operatorId !== step.operatorId
-    ) {
-
-      await this.notifications.notifyTaskAssignment({
-        operatorId: dto.operatorId,
-        actorId: userId,
-        taskId: step.taskId,
-        workflowStepId: step.id,
-        type: "TASK_ASSIGNED",
-        messageSnippet: "Te asignaron una tarea",
-      }).catch(() => {
-        // no crítico, mismo criterio que en summon()
-      })
-
-    }
 
     return this.publishDelta(
       result,
@@ -512,10 +491,12 @@ export class WorkflowService {
         actorId,
         taskId: step.taskId,
         workflowStepId: step.id,
+        // Siempre vocabulario de convocatoria (no "asignó"): la
+        // asignación de fila no notifica; esto solo viene de summon.
         type: mode === "ASSIGN" ? "TASK_ASSIGNED" : "TASK_SUMMONED",
         messageSnippet:
           mode === "ASSIGN"
-            ? "Te asignaron una tarea"
+            ? "Te convocaron a una tarea"
             : "Te convocaron a una tarea — revisa Mis tareas",
       }).catch(() => {
         // no crítico, ver comentario arriba
