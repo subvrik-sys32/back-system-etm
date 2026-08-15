@@ -8,6 +8,7 @@ import {
   UseInterceptors,
   UsePipes,
   ValidationPipe,
+  BadRequestException,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
 import {
@@ -25,52 +26,31 @@ export class NestingRunController {
     private readonly cadParse: CadParseService,
   ) {}
 
-  /** Sync (compat). */
-  @Post('nest')
-  @UsePipes(
-    new ValidationPipe({
-      whitelist: false,
-      forbidNonWhitelisted: false,
-      transform: false,
-    }),
-  )
-  run(@Body() body: NestRunRequest) {
-    return this.nesting.run(body)
+  /** DXF | GEO | PDF → NestingPiece[] (parser rico). */
+  @Post('cad/parse')
+  @UseInterceptors(FileInterceptor('file'))
+  async parseCad(
+    @UploadedFile() file?: { buffer: Buffer; originalname?: string },
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('file required')
+    }
+    return this.cadParse.parseUpload(file.originalname || 'upload.dxf', file.buffer)
   }
 
-  /** Async: devuelve jobId; poll GET nest/jobs/:id */
-  @Post('nest/jobs')
-  @UsePipes(
-    new ValidationPipe({
-      whitelist: false,
-      forbidNonWhitelisted: false,
-      transform: false,
-    }),
-  )
-  createJob(@Body() body: NestRunRequest) {
-    return this.jobs.create(body)
-  }
-
-  @Get('nest/jobs/:id')
-  getJob(@Param('id') id: string) {
-    return this.jobs.get(id)
-  }
-
-  @Post('nest/jobs/:id/cancel')
-  cancelJob(@Param('id') id: string) {
-    return this.jobs.cancel(id)
-  }
-
-  /**
-   * Primer escalón CAD-on-back: DXF → NestingPiece[].
-   * multipart field "file".
-   */
+  /** Compat. */
   @Post('cad/parse-dxf')
   @UseInterceptors(FileInterceptor('file'))
-  parseDxf(@UploadedFile() file?: { buffer: Buffer; originalname?: string }) {
+  async parseDxf(
+    @UploadedFile() file?: { buffer: Buffer; originalname?: string },
+  ) {
     if (!file?.buffer?.length) {
-      return { error: 'file required' }
+      throw new BadRequestException('file required')
     }
-    return this.cadParse.parseDxfBuffer(file.buffer, file.originalname || 'upload.dxf')
+    return this.cadParse.parseUpload(
+      file.originalname || 'upload.dxf',
+      file.buffer,
+    )
   }
 }
+
