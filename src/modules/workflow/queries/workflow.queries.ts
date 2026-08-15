@@ -26,6 +26,8 @@ export async function getStepForUpdate(
 
         invitedOperatorId:true,
 
+        coOperatorIds:true,
+
       },
 
     })

@@ -162,8 +162,19 @@ export class WorkflowService {
     const operatorChanging =
       dto.operatorId !== undefined && dto.operatorId !== step.operatorId
 
+    const prevCos: string[] = Array.isArray(step.coOperatorIds)
+      ? step.coOperatorIds
+      : []
+    const nextCos: string[] | undefined = dto.coOperatorIds
+    const cosChanging =
+      nextCos !== undefined &&
+      (nextCos.length !== prevCos.length ||
+        nextCos.some((id, i) => id !== prevCos[i]) ||
+        prevCos.some(id => !nextCos.includes(id)))
+
     const patch: Record<string, unknown> = {
       ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
+      ...(dto.coOperatorIds !== undefined && { coOperatorIds: dto.coOperatorIds }),
       ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
       ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
       ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
@@ -173,17 +184,25 @@ export class WorkflowService {
       patch.invitedOperatorId = null
       patch.invitedById = null
       patch.invitedAt = null
-      // Quién asignó desde la fila (o null si se desasignó).
       patch.assignedById = dto.operatorId ? userId : null
 
-      // Destinatario de la noti anterior: invitado pendiente o el
-      // operario que estaba puesto (haya sido por fila o convocatoria).
       const previousRecipient =
         step.invitedOperatorId ?? step.operatorId ?? null
 
       if (previousRecipient && previousRecipient !== dto.operatorId) {
         await this.notifications
           .retractTaskAssignment(step.id, previousRecipient)
+          .catch(() => {})
+      }
+    }
+
+    // Co-operarios removidos: retract de su noti
+    if (cosChanging && nextCos) {
+      for (const removed of prevCos.filter(id => !nextCos.includes(id))) {
+        // No retract del primary actual
+        if (removed === (dto.operatorId ?? step.operatorId)) continue
+        await this.notifications
+          .retractTaskAssignment(step.id, removed)
           .catch(() => {})
       }
     }
@@ -195,6 +214,7 @@ export class WorkflowService {
       patch,
     )
 
+    // Primary nuevo
     if (operatorChanging && dto.operatorId) {
       await this.notifications.notifyTaskAssignment({
         operatorId: dto.operatorId,
@@ -203,9 +223,25 @@ export class WorkflowService {
         workflowStepId: step.id,
         type: "TASK_ASSIGNED",
         messageSnippet: "Te asignaron una tarea",
-      }).catch(() => {
-        // no crítico — la asignación ya se persistió
-      })
+      }).catch(() => {})
+    }
+
+    // Co-operarios nuevos
+    if (cosChanging && nextCos) {
+      const primaryId = (dto.operatorId !== undefined
+        ? dto.operatorId
+        : step.operatorId) as string | null
+      for (const added of nextCos.filter(id => !prevCos.includes(id))) {
+        if (!added || added === primaryId) continue
+        await this.notifications.notifyTaskAssignment({
+          operatorId: added,
+          actorId: userId,
+          taskId: step.taskId,
+          workflowStepId: step.id,
+          type: "TASK_ASSIGNED",
+          messageSnippet: "Te asignaron una tarea",
+        }).catch(() => {})
+      }
     }
 
     return this.publishDelta(
@@ -219,6 +255,30 @@ export class WorkflowService {
     id: string,
     userId: string,
   ) {
+
+    // Máx. 1 PROGRESS por operario: se puede *asignar* a varias
+    // tareas, pero no *iniciar* una segunda mientras otra sigue en
+    // PROGRESS.
+    const stepForBusy = await this.prisma.workflowStep.findUnique({
+      where: { id },
+      select: { operatorId: true },
+    })
+    if (stepForBusy?.operatorId) {
+      const otherProgress = await this.prisma.workflowStep.findFirst({
+        where: {
+          operatorId: stepForBusy.operatorId,
+          status: WorkflowStatus.PROGRESS,
+          id: { not: id },
+          task: { deletedAt: null },
+        },
+        select: { id: true },
+      })
+      if (otherProgress) {
+        throw new BadRequestException(
+          "El operario ya está trabajando en otro proceso activo. Debe pausarlo o completarlo antes de iniciar otro.",
+        )
+      }
+    }
 
     return this.transitionStatus(
 

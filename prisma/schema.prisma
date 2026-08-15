@@ -440,6 +440,10 @@ model WorkflowStep {
   reviewedAt        DateTime?
   operatorId        String?
   operator          User?          @relation(fields: [operatorId], references: [id])
+  // Operarios adicionales del step (además del primary `operatorId`).
+  // El primary sigue siendo quien inicia/completa y se atribuye en
+  // bitácora; los co-operarios se notifican y aparecen en UI.
+  coOperatorIds     String[]       @default([])
   // Quién puso a `operator` ahí mediante "Convocar" (modo ASSIGN) —
   // null cuando el propio operario se autoasignó (flujo normal de
   // ProcessOperatorCell al iniciar). Es lo que separa "Asignadas" de
