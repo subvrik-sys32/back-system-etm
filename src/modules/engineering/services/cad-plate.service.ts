@@ -9,6 +9,8 @@ import {
   exportGeometryToDxf,
   exportGeometryToDxfBuffer,
 } from '../cad/exporters/dxf/dxf-exporter'
+import { geometryModelToNestingPiece } from '../cad/adapters/geometry-to-nesting-piece'
+import type { NestingPiece } from '../nesting/engine/types'
 
 export type CreatePlateDto = {
   width: number
@@ -48,6 +50,13 @@ export class CadPlateService {
     const text = exportGeometryToDxf(model)
     const buffer = exportGeometryToDxfBuffer(model)
     return { text, buffer, model }
+  }
+
+  buildNestingPiece(dto: CreatePlateDto): NestingPiece {
+    const model = this.buildModel(dto)
+    return geometryModelToNestingPiece(model, {
+      id: `plate-${dto.width}x${dto.height}-${Date.now()}`,
+    })
   }
 
   private assertDto(dto: CreatePlateDto): void {

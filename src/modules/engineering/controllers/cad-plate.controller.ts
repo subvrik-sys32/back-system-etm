@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Header,
   Post,
   Query,
   StreamableFile,
@@ -10,14 +9,14 @@ import {
   CadPlateService,
   type CreatePlateDto,
 } from '../services/cad-plate.service'
+import type { NestingPiece } from '../nesting/engine/types'
+import type { GeometryModel } from '../cad/model/geometry-model'
 
 /**
- * API del generador de placa paramétrica.
- *
  * POST /engineering/cad/plate
- *   body: { width, height, holes?: { diameter, offset } }
  *   ?format=json (default) → GeometryModel
- *   ?format=dxf            → archivo .dxf (application/dxf)
+ *   ?format=dxf            → .dxf
+ *   ?format=piece          → NestingPiece (para /engineering/nest)
  */
 @Controller('engineering/cad')
 export class CadPlateController {
@@ -27,9 +26,7 @@ export class CadPlateController {
   generate(
     @Body() body: CreatePlateDto,
     @Query('format') format?: string,
-  ):
-    | ReturnType<CadPlateService['buildModel']>
-    | StreamableFile {
+  ): GeometryModel | NestingPiece | StreamableFile {
     const fmt = (format ?? 'json').toLowerCase()
 
     if (fmt === 'dxf') {
@@ -39,6 +36,10 @@ export class CadPlateController {
         type: 'application/dxf',
         disposition: `attachment; filename="${name}"`,
       })
+    }
+
+    if (fmt === 'piece' || fmt === 'nesting-piece') {
+      return this.plates.buildNestingPiece(body)
     }
 
     return this.plates.buildModel(body)
