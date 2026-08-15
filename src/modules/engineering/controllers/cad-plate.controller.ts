@@ -4,6 +4,8 @@ import {
   Post,
   Query,
   StreamableFile,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common'
 import {
   CadPlateService,
@@ -23,6 +25,13 @@ export class CadPlateController {
   constructor(private readonly plates: CadPlateService) {}
 
   @Post('plate')
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      transform: false,
+    }),
+  )
   generate(
     @Body() body: CreatePlateDto,
     @Query('format') format?: string,

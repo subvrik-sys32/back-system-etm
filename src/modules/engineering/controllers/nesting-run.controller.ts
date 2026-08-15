@@ -1,21 +1,34 @@
-import { Body, Controller, Post } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Post,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common'
 import {
   NestingRunService,
   type NestRunRequest,
 } from '../services/nesting-run.service'
 
 /**
- * Ejecuta el motor de nesting en el servidor.
- *
  * POST /engineering/nest
- * body: { pieces: NestingPiece[], options: NestingOptions (sin callbacks) }
- * → { sheets, pieceCount, sheetCount }
+ *
+ * Body grande (piezas con contornos). No usar whitelist global:
+ * NestRunRequest es un type TS sin class-validator → forbidNonWhitelisted
+ * vaciaría el body.
  */
 @Controller('engineering')
 export class NestingRunController {
   constructor(private readonly nesting: NestingRunService) {}
 
   @Post('nest')
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      transform: false,
+    }),
+  )
   run(@Body() body: NestRunRequest) {
     return this.nesting.run(body)
   }

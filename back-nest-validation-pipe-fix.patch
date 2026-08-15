@@ -1,0 +1,71 @@
+diff --git a/src/modules/engineering/controllers/cad-plate.controller.ts b/src/modules/engineering/controllers/cad-plate.controller.ts
+index 1e11132..3ad8a75 100644
+--- a/src/modules/engineering/controllers/cad-plate.controller.ts
++++ b/src/modules/engineering/controllers/cad-plate.controller.ts
+@@ -4,6 +4,8 @@ import {
+   Post,
+   Query,
+   StreamableFile,
++  UsePipes,
++  ValidationPipe,
+ } from '@nestjs/common'
+ import {
+   CadPlateService,
+@@ -23,6 +25,13 @@ export class CadPlateController {
+   constructor(private readonly plates: CadPlateService) {}
+ 
+   @Post('plate')
++  @UsePipes(
++    new ValidationPipe({
++      whitelist: false,
++      forbidNonWhitelisted: false,
++      transform: false,
++    }),
++  )
+   generate(
+     @Body() body: CreatePlateDto,
+     @Query('format') format?: string,
+diff --git a/src/modules/engineering/controllers/nesting-run.controller.ts b/src/modules/engineering/controllers/nesting-run.controller.ts
+index 68fe4ba..77263b6 100644
+--- a/src/modules/engineering/controllers/nesting-run.controller.ts
++++ b/src/modules/engineering/controllers/nesting-run.controller.ts
+@@ -1,21 +1,34 @@
+-import { Body, Controller, Post } from '@nestjs/common'
++import {
++  Body,
++  Controller,
++  Post,
++  UsePipes,
++  ValidationPipe,
++} from '@nestjs/common'
+ import {
+   NestingRunService,
+   type NestRunRequest,
+ } from '../services/nesting-run.service'
+ 
+ /**
+- * Ejecuta el motor de nesting en el servidor.
+- *
+  * POST /engineering/nest
+- * body: { pieces: NestingPiece[], options: NestingOptions (sin callbacks) }
+- * → { sheets, pieceCount, sheetCount }
++ *
++ * Body grande (piezas con contornos). No usar whitelist global:
++ * NestRunRequest es un type TS sin class-validator → forbidNonWhitelisted
++ * vaciaría el body.
+  */
+ @Controller('engineering')
+ export class NestingRunController {
+   constructor(private readonly nesting: NestingRunService) {}
+ 
+   @Post('nest')
++  @UsePipes(
++    new ValidationPipe({
++      whitelist: false,
++      forbidNonWhitelisted: false,
++      transform: false,
++    }),
++  )
+   run(@Body() body: NestRunRequest) {
+     return this.nesting.run(body)
+   }
