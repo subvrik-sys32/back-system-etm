@@ -6,6 +6,7 @@ import {
   type NestingPiece,
   type SheetConfig,
 } from '../nesting/engine'
+import { preparePiecesForPack } from './prepare-pieces'
 
 export type NestRunRequest = {
   pieces: NestingPiece[]
@@ -22,6 +23,7 @@ export type NestRunResponse = {
   sheets: NestedSheet[]
   pieceCount: number
   sheetCount: number
+  durationMs?: number
 }
 
 @Injectable()
@@ -50,10 +52,17 @@ export class NestingRunService {
       )
     }
 
+    const mode = body.options.mode ?? 'fast'
+    const prepared = preparePiecesForPack(
+      body.pieces,
+      mode === 'precise' ? 'precise' : 'fast',
+    )
+
+    const t0 = Date.now()
     try {
-      const sheets = optimize(body.pieces, {
+      const sheets = optimize(prepared, {
         sheet: body.options.sheet,
-        mode: body.options.mode ?? 'fast',
+        mode,
         separation: body.options.separation ?? 5,
         rotationMode: body.options.rotationMode ?? '0-90-180-270',
         searchStep: body.options.searchStep,
@@ -66,6 +75,7 @@ export class NestingRunService {
           0,
         ),
         sheetCount: sheets.length,
+        durationMs: Date.now() - t0,
       }
     } catch (err) {
       throw new BadRequestException(
