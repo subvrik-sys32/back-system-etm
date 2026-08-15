@@ -1,53 +1,43 @@
 /**
- * Restaura outline + subEntities desde la pieza fuente.
- * preparePieces puede usar bbox sin huecos para pack; el resultado
- * visible/exportable debe ser true-shape.
+ * Rehidrata outline + subEntities con el MISMO pipeline que
+ * RectangleHeuristicStrategy / NestingEngine.cpp:
+ *   scale(opcional) → rotateAround(center) → align(-bounds.topLeft) → translate(x,y)
+ *
+ * Si placePiece ya dejó subEntities, se respeta el placement tal cual.
  */
+import {
+  applyToOutline,
+  boundingRect,
+  compose,
+  rectCenter,
+  rotateAround,
+  translate,
+  IDENTITY,
+  type Transform2D,
+} from './geometry'
 import type {
   NestedSheet,
   NestingPiece,
-  PieceOutline,
-  Point2D,
-  SubEntity,
+  PlacedPiece,
 } from './types'
-
-function rotatePoint(p: Point2D, deg: number): Point2D {
-  const r = ((deg % 360) * Math.PI) / 180
-  const c = Math.cos(r)
-  const s = Math.sin(r)
-  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c }
-}
-
-function transformOutline(
-  outline: PieceOutline,
-  rotationDeg: number,
-  tx: number,
-  ty: number,
-): PieceOutline {
-  return {
-    points: outline.points.map((p) => {
-      const r = rotatePoint(p, rotationDeg)
-      return { x: r.x + tx, y: r.y + ty }
-    }),
-  }
-}
-
-function transformSubEntities(
-  subs: SubEntity[] | undefined,
-  rotationDeg: number,
-  tx: number,
-  ty: number,
-): SubEntity[] | undefined {
-  if (!subs?.length) return undefined
-  return subs.map((s) => ({
-    ...s,
-    outline: transformOutline(s.outline, rotationDeg, tx, ty),
-  }))
-}
 
 function basePieceId(id: string): string {
   const i = id.indexOf('#')
   return i >= 0 ? id.slice(0, i) : id
+}
+
+function placementTransform(
+  src: NestingPiece,
+  placed: PlacedPiece,
+): Transform2D {
+  const angle = placed.angle ?? 0
+  const bounds = boundingRect(src.outline)
+  const center = rectCenter(bounds)
+  const rot = rotateAround(center, angle)
+  const rotated = applyToOutline(rot, src.outline)
+  const rBounds = boundingRect(rotated)
+  const align = translate(-rBounds.x, -rBounds.y)
+  return compose(compose(IDENTITY, compose(rot, align)), translate(placed.x, placed.y))
 }
 
 export function rehydrateNestedSheets(
@@ -62,20 +52,26 @@ export function rehydrateNestedSheets(
   return sheets.map((sheet) => ({
     ...sheet,
     pieces: sheet.pieces.map((placed) => {
+      // placePiece ya transformó subEntities → no tocar
+      if (placed.subEntities && placed.subEntities.length > 0) {
+        return placed
+      }
+
       const src =
         byId.get(placed.pieceId) ??
         byId.get(basePieceId(placed.pieceId))
 
       if (!src) return placed
 
-      const angle = placed.angle ?? 0
-      const tx = placed.x
-      const ty = placed.y
+      const m = placementTransform(src, placed)
 
       return {
         ...placed,
-        outline: transformOutline(src.outline, angle, tx, ty),
-        subEntities: transformSubEntities(src.subEntities, angle, tx, ty),
+        outline: applyToOutline(m, src.outline),
+        subEntities: src.subEntities?.map((s) => ({
+          ...s,
+          outline: applyToOutline(m, s.outline),
+        })),
         color: placed.color ?? src.color,
       }
     }),

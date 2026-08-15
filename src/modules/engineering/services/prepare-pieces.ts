@@ -1,7 +1,11 @@
 /**
  * Pre-proceso ANTES de pack.
- * fast -> bbox sin subEntities (huecos no afectan rectangle heuristic)
- * precise -> Douglas-Peucker + tope vertices / features
+ *
+ * Contrato (alineado a AI-Nesting / NestingEngine.cpp):
+ * - La geometría de placement y de dibujo es la misma.
+ * - fast NO destruye outline ni subEntities: el heuristic ya usa AABB
+ *   (boundingRect) para colisión; los huecos solo pesan al dibujar/exportar.
+ * - precise: Douglas-Peucker + tope de features para polígonos densos.
  */
 import type {
   NestingPiece,
@@ -10,6 +14,7 @@ import type {
 } from '../nesting/engine/types'
 
 const MAX_OUTLINE_POINTS_PRECISE = 48
+const MAX_SUB_ENTITIES_PRECISE = 64
 const DP_EPSILON_MM = 0.35
 
 function dist2(a: Point2D, b: Point2D): number {
@@ -42,7 +47,6 @@ export function simplifyOutline(
   const keep = new Uint8Array(pts.length)
   keep[0] = 1
   keep[pts.length - 1] = 1
-
   const stack: [number, number][] = [[0, pts.length - 1]]
   while (stack.length) {
     const [i, j] = stack.pop()!
@@ -88,6 +92,7 @@ export function simplifyOutline(
   return { points: simplified }
 }
 
+/** @deprecated solo util de depuración; no usar en el path de pack. */
 export function outlineToBBoxRect(outline: PieceOutline): PieceOutline {
   let minX = Infinity
   let minY = Infinity
@@ -123,22 +128,22 @@ export function outlineToBBoxRect(outline: PieceOutline): PieceOutline {
 
 export type PrepareMode = 'fast' | 'precise'
 
+/**
+ * fast  → identidad (mismo modelo que AI-Nesting Rapido: AABB search, geom completa).
+ * precise → simplify outlines densos; no borrar huecos.
+ */
 export function preparePiecesForPack(
   pieces: NestingPiece[],
   mode: PrepareMode = 'fast',
 ): NestingPiece[] {
-  return pieces.map((p) => {
-    if (mode === 'fast') {
-      return {
-        ...p,
-        outline: outlineToBBoxRect(p.outline),
-        subEntities: undefined,
-      }
-    }
+  if (mode === 'fast') {
+    return pieces
+  }
 
+  return pieces.map((p) => {
     const outline = simplifyOutline(p.outline)
     const subEntities = (p.subEntities ?? [])
-      .slice(0, 32)
+      .slice(0, MAX_SUB_ENTITIES_PRECISE)
       .map((s) => ({
         ...s,
         outline: simplifyOutline(s.outline),

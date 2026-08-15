@@ -1,0 +1,196 @@
+diff --git a/src/modules/engineering/nesting/engine/rehydrate-geometry.ts b/src/modules/engineering/nesting/engine/rehydrate-geometry.ts
+index 6d2912e..b644ae1 100644
+--- a/src/modules/engineering/nesting/engine/rehydrate-geometry.ts
++++ b/src/modules/engineering/nesting/engine/rehydrate-geometry.ts
+@@ -1,55 +1,45 @@
+ /**
+- * Restaura outline + subEntities desde la pieza fuente.
+- * preparePieces puede usar bbox sin huecos para pack; el resultado
+- * visible/exportable debe ser true-shape.
++ * Rehidrata outline + subEntities con el MISMO pipeline que
++ * RectangleHeuristicStrategy / NestingEngine.cpp:
++ *   scale(opcional) → rotateAround(center) → align(-bounds.topLeft) → translate(x,y)
++ *
++ * Si placePiece ya dejó subEntities, se respeta el placement tal cual.
+  */
++import {
++  applyToOutline,
++  boundingRect,
++  compose,
++  rectCenter,
++  rotateAround,
++  translate,
++  IDENTITY,
++  type Transform2D,
++} from './geometry'
+ import type {
+   NestedSheet,
+   NestingPiece,
+-  PieceOutline,
+-  Point2D,
+-  SubEntity,
++  PlacedPiece,
+ } from './types'
+ 
+-function rotatePoint(p: Point2D, deg: number): Point2D {
+-  const r = ((deg % 360) * Math.PI) / 180
+-  const c = Math.cos(r)
+-  const s = Math.sin(r)
+-  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c }
+-}
+-
+-function transformOutline(
+-  outline: PieceOutline,
+-  rotationDeg: number,
+-  tx: number,
+-  ty: number,
+-): PieceOutline {
+-  return {
+-    points: outline.points.map((p) => {
+-      const r = rotatePoint(p, rotationDeg)
+-      return { x: r.x + tx, y: r.y + ty }
+-    }),
+-  }
+-}
+-
+-function transformSubEntities(
+-  subs: SubEntity[] | undefined,
+-  rotationDeg: number,
+-  tx: number,
+-  ty: number,
+-): SubEntity[] | undefined {
+-  if (!subs?.length) return undefined
+-  return subs.map((s) => ({
+-    ...s,
+-    outline: transformOutline(s.outline, rotationDeg, tx, ty),
+-  }))
+-}
+-
+ function basePieceId(id: string): string {
+   const i = id.indexOf('#')
+   return i >= 0 ? id.slice(0, i) : id
+ }
+ 
++function placementTransform(
++  src: NestingPiece,
++  placed: PlacedPiece,
++): Transform2D {
++  const angle = placed.angle ?? 0
++  const bounds = boundingRect(src.outline)
++  const center = rectCenter(bounds)
++  const rot = rotateAround(center, angle)
++  const rotated = applyToOutline(rot, src.outline)
++  const rBounds = boundingRect(rotated)
++  const align = translate(-rBounds.x, -rBounds.y)
++  return compose(compose(IDENTITY, compose(rot, align)), translate(placed.x, placed.y))
++}
++
+ export function rehydrateNestedSheets(
+   sheets: NestedSheet[],
+   sources: NestingPiece[],
+@@ -62,20 +52,26 @@ export function rehydrateNestedSheets(
+   return sheets.map((sheet) => ({
+     ...sheet,
+     pieces: sheet.pieces.map((placed) => {
++      // placePiece ya transformó subEntities → no tocar
++      if (placed.subEntities && placed.subEntities.length > 0) {
++        return placed
++      }
++
+       const src =
+         byId.get(placed.pieceId) ??
+         byId.get(basePieceId(placed.pieceId))
+ 
+       if (!src) return placed
+ 
+-      const angle = placed.angle ?? 0
+-      const tx = placed.x
+-      const ty = placed.y
++      const m = placementTransform(src, placed)
+ 
+       return {
+         ...placed,
+-        outline: transformOutline(src.outline, angle, tx, ty),
+-        subEntities: transformSubEntities(src.subEntities, angle, tx, ty),
++        outline: applyToOutline(m, src.outline),
++        subEntities: src.subEntities?.map((s) => ({
++          ...s,
++          outline: applyToOutline(m, s.outline),
++        })),
+         color: placed.color ?? src.color,
+       }
+     }),
+diff --git a/src/modules/engineering/services/prepare-pieces.ts b/src/modules/engineering/services/prepare-pieces.ts
+index 82b320b..d26f05f 100644
+--- a/src/modules/engineering/services/prepare-pieces.ts
++++ b/src/modules/engineering/services/prepare-pieces.ts
+@@ -1,7 +1,11 @@
+ /**
+  * Pre-proceso ANTES de pack.
+- * fast -> bbox sin subEntities (huecos no afectan rectangle heuristic)
+- * precise -> Douglas-Peucker + tope vertices / features
++ *
++ * Contrato (alineado a AI-Nesting / NestingEngine.cpp):
++ * - La geometría de placement y de dibujo es la misma.
++ * - fast NO destruye outline ni subEntities: el heuristic ya usa AABB
++ *   (boundingRect) para colisión; los huecos solo pesan al dibujar/exportar.
++ * - precise: Douglas-Peucker + tope de features para polígonos densos.
+  */
+ import type {
+   NestingPiece,
+@@ -10,6 +14,7 @@ import type {
+ } from '../nesting/engine/types'
+ 
+ const MAX_OUTLINE_POINTS_PRECISE = 48
++const MAX_SUB_ENTITIES_PRECISE = 64
+ const DP_EPSILON_MM = 0.35
+ 
+ function dist2(a: Point2D, b: Point2D): number {
+@@ -42,7 +47,6 @@ export function simplifyOutline(
+   const keep = new Uint8Array(pts.length)
+   keep[0] = 1
+   keep[pts.length - 1] = 1
+-
+   const stack: [number, number][] = [[0, pts.length - 1]]
+   while (stack.length) {
+     const [i, j] = stack.pop()!
+@@ -88,6 +92,7 @@ export function simplifyOutline(
+   return { points: simplified }
+ }
+ 
++/** @deprecated solo util de depuración; no usar en el path de pack. */
+ export function outlineToBBoxRect(outline: PieceOutline): PieceOutline {
+   let minX = Infinity
+   let minY = Infinity
+@@ -123,22 +128,22 @@ export function outlineToBBoxRect(outline: PieceOutline): PieceOutline {
+ 
+ export type PrepareMode = 'fast' | 'precise'
+ 
++/**
++ * fast  → identidad (mismo modelo que AI-Nesting Rapido: AABB search, geom completa).
++ * precise → simplify outlines densos; no borrar huecos.
++ */
+ export function preparePiecesForPack(
+   pieces: NestingPiece[],
+   mode: PrepareMode = 'fast',
+ ): NestingPiece[] {
+-  return pieces.map((p) => {
+-    if (mode === 'fast') {
+-      return {
+-        ...p,
+-        outline: outlineToBBoxRect(p.outline),
+-        subEntities: undefined,
+-      }
+-    }
++  if (mode === 'fast') {
++    return pieces
++  }
+ 
++  return pieces.map((p) => {
+     const outline = simplifyOutline(p.outline)
+     const subEntities = (p.subEntities ?? [])
+-      .slice(0, 32)
++      .slice(0, MAX_SUB_ENTITIES_PRECISE)
+       .map((s) => ({
+         ...s,
+         outline: simplifyOutline(s.outline),
