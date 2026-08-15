@@ -49,14 +49,27 @@ function runWithOptionalMultiStart(
     onProgress: undefined,
   })
 
+  // Orden por lado mayor (plates alargadas primero)
+  const byMaxSide = [...pieces].sort((a, b) => {
+    const A = boundingRect(a.outline)
+    const B = boundingRect(b.outline)
+    return Math.max(B.width, B.height) - Math.max(A.width, A.height)
+  })
+  const alt2 = strategy.optimize(byMaxSide, {
+    ...options,
+    onProgress: undefined,
+  })
+
   const w = options.sheet.width
   const h = options.sheet.height
   let best = base
   let bestScore = sheetScore(base, w, h)
-  const s1 = sheetScore(alt1, w, h)
-  if (s1 < bestScore) {
-    best = alt1
-    bestScore = s1
+  for (const cand of [alt1, alt2]) {
+    const s = sheetScore(cand, w, h)
+    if (s < bestScore) {
+      best = cand
+      bestScore = s
+    }
   }
 
   return best
