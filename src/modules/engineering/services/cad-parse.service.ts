@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import DxfParser from 'dxf-parser'
 import { readCadFile, isSupportedCadFile } from '../cad/rich/cad-reader'
-import { parsePdf, isPdfFile } from '../cad/rich/pdf-parser'
 import { parseDxfGeometry } from '../pdf/dxf-geometry-parser'
 import { dxfPiecesToNestingPieces } from './dxf-to-nesting-pieces'
 import type { NestingPiece } from '../nesting/engine/types'
@@ -37,6 +36,10 @@ function assertCad(cad: CadData, label: string): CadData {
   return cad
 }
 
+/**
+ * DXF/GEO en servidor (sin pdfjs — PDF se parsea en el browser).
+ * Evita dependencia pesada y fallos de red en CI/Render.
+ */
 @Injectable()
 export class CadParseService {
   private readonly logger = new Logger(CadParseService.name)
@@ -58,7 +61,6 @@ export class CadParseService {
     }
   }
 
-  /** DXF: multi-pieza (connectivity + holes) vía geometry-parser. */
   private parseDxfMulti(fileName: string, content: string): CadParseResponse {
     let dxf: any
     try {
@@ -74,11 +76,7 @@ export class CadParseService {
     }
     const geometry = parseDxfGeometry(entities)
     const pieces = dxfPiecesToNestingPieces(geometry.pieces)
-    this.logger.log(
-      `CAD multi DXF ${fileName}: ${pieces.length} piezas ` +
-        `(layout ${geometry.layout?.width?.toFixed?.(1) ?? '?'}x` +
-        `${geometry.layout?.height?.toFixed?.(1) ?? '?'})`,
-    )
+    this.logger.log(`CAD multi DXF ${fileName}: ${pieces.length} piezas`)
     return this.wrap(
       pieces,
       geometry.layout?.width,
@@ -88,19 +86,23 @@ export class CadParseService {
 
   parseFile(fileName: string, content: string): CadParseResponse {
     const lower = fileName.toLowerCase()
+    if (lower.endsWith('.pdf')) {
+      throw new BadRequestException(
+        'PDF no se parsea en servidor. El cliente debe enviar geometría ya extraída o usar import local de PDF.',
+      )
+    }
     if (lower.endsWith('.dxf')) {
       return this.parseDxfMulti(fileName, content)
     }
     if (!isSupportedCadFile(fileName)) {
       throw new BadRequestException(
-        `Formato no soportado: ${fileName}. Use .dxf, .geo o .pdf`,
+        `Formato no soportado: ${fileName}. Use .dxf o .geo`,
       )
     }
     const cad = assertCad(readCadFile(fileName, content), fileName)
     const base = fileName.replace(/\.[^.]+$/, '') || 'piece'
     this.logger.log(
-      `CAD rich ${fileName}: entities=${cad.entities.length} ` +
-        `${cad.width.toFixed(1)}x${cad.height.toFixed(1)}`,
+      `CAD rich ${fileName}: entities=${cad.entities.length}`,
     )
     return this.wrap([cadDataToNestingPiece(base, cad)], cad.width, cad.height)
   }
@@ -110,20 +112,9 @@ export class CadParseService {
     buffer: Buffer,
   ): Promise<CadParseResponse> {
     const lower = fileName.toLowerCase()
-    if (isPdfFile(fileName) || lower.endsWith('.pdf')) {
-      const ab = buffer.buffer.slice(
-        buffer.byteOffset,
-        buffer.byteOffset + buffer.byteLength,
-      ) as ArrayBuffer
-      const cad = assertCad(await parsePdf(fileName, ab), fileName)
-      const base = fileName.replace(/\.[^.]+$/, '') || 'piece'
-      this.logger.log(
-        `CAD PDF ${fileName}: entities=${cad.entities.length}`,
-      )
-      return this.wrap(
-        [cadDataToNestingPiece(base, cad)],
-        cad.width,
-        cad.height,
+    if (lower.endsWith('.pdf')) {
+      throw new BadRequestException(
+        'PDF no se parsea en servidor. Importar PDF desde el cliente.',
       )
     }
     return this.parseFile(fileName, buffer.toString('utf-8'))
