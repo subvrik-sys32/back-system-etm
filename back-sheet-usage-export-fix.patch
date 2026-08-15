@@ -1,0 +1,10 @@
+diff --git a/src/modules/engineering/nesting/engine/index.ts b/src/modules/engineering/nesting/engine/index.ts
+index f1bc187..2ba8c98 100644
+--- a/src/modules/engineering/nesting/engine/index.ts
++++ b/src/modules/engineering/nesting/engine/index.ts
+@@ -5,4 +5,4 @@
+ export * from './types'
+ export * from './geometry'
+ export * from './optimize'
+-export { sheetUsageRatio } from './sheet-usage'
++export { calculateSheetUsagePercent } from './sheet-usage'

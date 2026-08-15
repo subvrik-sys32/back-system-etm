@@ -5,4 +5,4 @@
 export * from './types'
 export * from './geometry'
 export * from './optimize'
-export { sheetUsageRatio } from './sheet-usage'
+export { calculateSheetUsagePercent } from './sheet-usage'
