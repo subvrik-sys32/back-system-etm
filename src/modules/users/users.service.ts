@@ -582,6 +582,9 @@ export class UsersService {
         level: true,
         color: true,
         icon: true,
+        // El where ya exige active:true, pero el front tipa User.active
+        // y filtros como isEngineeringUser leían undefined como "inactivo".
+        active: true,
         // Para mostrar "visto por última vez hace X" cuando no
         // está online (ver el panel de Activos del sidebar).
         lastSeenAt: true,
