@@ -106,6 +106,7 @@ import {
 import {
   EngineeringModule,
 } from "@/modules/engineering/engineering.module"
+import { EngineeringTasksModule } from "./modules/engineering-tasks/engineering-tasks.module"
 
 import {
   SidebarModule,
@@ -147,6 +148,7 @@ import {
     CommentsModule,
     NotificationsModule,
     EngineeringModule,
+    EngineeringTasksModule,
     SidebarModule,
     StorageModule,
     ActivityLogModule,

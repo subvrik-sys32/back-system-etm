@@ -1,4 +1,10 @@
-import { IsEnum, IsOptional, IsString, IsUUID, MinLength } from "class-validator"
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from "class-validator"
 import { EngineeringProcessCode } from "@prisma/client"
 
 export class CreateEngineeringTaskDto {

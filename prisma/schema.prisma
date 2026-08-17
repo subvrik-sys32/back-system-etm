@@ -112,6 +112,9 @@ model User {
   updatedProjects        Project[]      @relation("ProjectUpdatedBy")
   createdTasks           Task[]         @relation("TaskCreatedBy")
   updatedTasks           Task[]         @relation("TaskUpdatedBy")
+  engineeringAssigned    EngineeringTask[] @relation("EngineeringTaskAssignee")
+  engineeringCreated     EngineeringTask[] @relation("EngineeringTaskCreatedBy")
+  engineeringUpdated     EngineeringTask[] @relation("EngineeringTaskUpdatedBy")
   // Muchos a muchos — antes un roleId único (FK, un solo rol por
   // usuario). Ahora puede tener varios roles simultáneos (ej.
   // alguien que es INGENIERIA y PROYECTOS a la vez). Mismo patrón
@@ -365,8 +368,9 @@ model Project {
   stage         Stage          @relation(fields: [stageId], references: [id])
   status        Status         @relation(fields: [statusId], references: [id])
   updatedBy     User           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
-  tasks         Task[]
-  comments      Comment[]
+  tasks             Task[]
+  engineeringTasks  EngineeringTask[]
+  comments          Comment[]
   activityLogs  ActivityLog[]
   notifications Notification[]
 
@@ -605,4 +609,50 @@ model ActivityLog {
   @@index([projectId])
   @@index([taskId])
   @@index([source])
+}
+// ── Ingeniería: tareas por proceso (diseño/procura). Independiente del pipeline de planta.
+enum EngineeringProcessCode {
+  MECHANICAL_DESIGN
+  ELECTRICAL_DESIGN
+  MECHANICAL_PLAN
+  ELECTRICAL_PLAN
+  LM_GEOS
+  CAM
+  BENDING
+  WELDING
+  PROCUREMENT
+}
+
+enum EngineeringTaskStatus {
+  QUEUE
+  PENDING
+  PROGRESS
+  COMPLETED
+}
+
+model EngineeringTask {
+  id          String                   @id @default(uuid())
+  taskNumber  Int                      @unique
+  title       String
+  projectId   String
+  processCode EngineeringProcessCode
+  status      EngineeringTaskStatus    @default(QUEUE)
+  assigneeId  String?
+  note        String?
+  position    Int                      @default(0)
+  createdById String
+  updatedById String
+  deletedAt   DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?   @relation("EngineeringTaskAssignee", fields: [assigneeId], references: [id])
+  createdBy User    @relation("EngineeringTaskCreatedBy", fields: [createdById], references: [id])
+  updatedBy User    @relation("EngineeringTaskUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([projectId])
+  @@index([processCode])
+  @@index([assigneeId])
+  @@index([status])
 }

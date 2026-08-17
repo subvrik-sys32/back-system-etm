@@ -1,7 +1,8 @@
 import { Module } from "@nestjs/common"
+
 import { EngineeringTasksController } from "./engineering-tasks.controller"
 import { EngineeringTasksService } from "./engineering-tasks.service"
-import { PrismaModule } from "@/prisma/prisma.module"
+import { PrismaModule } from "@/infra/database/prisma/prisma.module"
 
 @Module({
   imports: [PrismaModule],

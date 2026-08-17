@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
-import { PrismaService } from "@/prisma/prisma.service"
+import { EngineeringProcessCode } from "@prisma/client"
+
+import { PrismaService } from "@/infra/database/prisma/prisma.service"
+
 import { CreateEngineeringTaskDto } from "./dto/create-engineering-task.dto"
 import { UpdateEngineeringTaskDto } from "./dto/update-engineering-task.dto"
-import { EngineeringProcessCode } from "@prisma/client"
 
 const include = {
   project: { select: { id: true, projectCode: true, name: true } },
@@ -26,7 +28,11 @@ export class EngineeringTasksService {
         ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
       },
       include,
-      orderBy: [{ processCode: "asc" }, { position: "asc" }, { taskNumber: "asc" }],
+      orderBy: [
+        { processCode: "asc" },
+        { position: "asc" },
+        { taskNumber: "asc" },
+      ],
     })
   }
 
@@ -44,6 +50,7 @@ export class EngineeringTasksService {
       _max: { taskNumber: true },
     })
     const taskNumber = (max._max.taskNumber ?? 0) + 1
+
     return this.prisma.engineeringTask.create({
       data: {
         taskNumber,
@@ -75,7 +82,10 @@ export class EngineeringTasksService {
     await this.findOne(id)
     return this.prisma.engineeringTask.update({
       where: { id },
-      data: { deletedAt: new Date(), updatedById: userId },
+      data: {
+        deletedAt: new Date(),
+        updatedById: userId,
+      },
     })
   }
 }

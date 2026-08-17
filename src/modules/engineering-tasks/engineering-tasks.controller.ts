@@ -9,16 +9,18 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common"
+import { EngineeringProcessCode } from "@prisma/client"
+
 import { JwtAuthGuard } from "@/modules/auth/guards/jwt-auth.guard"
 import { PermissionsGuard } from "@/shared/guards/permissions.guard"
 import { Permissions } from "@/shared/decorators/permissions.decorator"
 import { CurrentUser } from "@/shared/decorators/current-user.decorator"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
+
 import { EngineeringTasksService } from "./engineering-tasks.service"
 import { CreateEngineeringTaskDto } from "./dto/create-engineering-task.dto"
 import { UpdateEngineeringTaskDto } from "./dto/update-engineering-task.dto"
-import { EngineeringProcessCode } from "@prisma/client"
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller("engineering-tasks")
