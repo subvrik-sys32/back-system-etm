@@ -587,7 +587,14 @@ export class UsersService {
         lastSeenAt: true,
         // Array ahora (m2m) — antes un solo role obligatorio por FK.
         roles: {
-          select: { code: true },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            icon: true,
+            color: true,
+            active: true,
+          },
         },
         // Faltaba por completo — sin esto, useAreaOperators
         // (Convocar en TaskAreaPanel) nunca podía filtrar por área
