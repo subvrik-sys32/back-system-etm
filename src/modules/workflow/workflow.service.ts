@@ -520,21 +520,33 @@ export class WorkflowService {
 
     const steps = await this.prisma.workflowStep.findMany({
       where: { id: { in: stepIds } },
-      select: { id: true, taskId: true },
+      select: {
+        id: true,
+        taskId: true,
+        status: true,
+        operatorId: true,
+        assignedById: true,
+        invitedOperatorId: true,
+      },
     })
 
     if (steps.length === 0) {
       throw new BadRequestException("No se encontraron los pasos indicados")
     }
 
+    const locked = steps.filter(
+      s =>
+        s.status === WorkflowStatus.COMPLETED ||
+        s.status === WorkflowStatus.REVIEWED,
+    )
+    if (locked.length > 0) {
+      throw new BadRequestException(
+        "No se puede convocar/reasignar un paso completado o en revisión",
+      )
+    }
+
     const invitedAt = new Date()
 
-    // El patch real que se le acaba de aplicar a CADA step — sin
-    // esto, propagateWorkflowUpdate (el que usan workflowHandler y
-    // processHandler en el frontend) recibe {taskId} sin `updated`
-    // y no hace nada: mismo bug que ACTIVITY_LOG, silencioso, cero
-    // error en consola. Los demás usuarios mirando la misma tarea
-    // se quedaban sin ver el cambio hasta refrescar la página.
     const patch =
       mode === "ASSIGN"
         ? {
@@ -556,36 +568,47 @@ export class WorkflowService {
     })
 
     for (const step of steps) {
+      // Destinatario previo (ASSIGN vía convocar o INVITE pendiente).
+      const previousRecipient =
+        step.invitedOperatorId ??
+        (step.assignedById ? step.operatorId : null)
 
-      // Una notificación por tarea convocada — igual que
-      // notifyComment, el fallo de esto no debería tumbar la
-      // asignación real (que ya se persistió arriba).
+      if (previousRecipient && previousRecipient !== operatorId) {
+        await this.notifications
+          .retractTaskAssignment(step.id, previousRecipient)
+          .catch(() => {})
+      }
+
+      // notifyTaskAssignment omite si operatorId === actorId.
       await this.notifications.notifyTaskAssignment({
         operatorId,
         actorId,
         taskId: step.taskId,
         workflowStepId: step.id,
-        // Convocatoria del panel: siempre TASK_SUMMONED para que el
-        // front diga "te convocó" (la fila usa TASK_ASSIGNED → "te asignó").
-        // actorId queda en la noti → se ve quién lo hizo.
         type: "TASK_SUMMONED",
         messageSnippet:
           mode === "ASSIGN"
             ? "Te convocaron a una tarea"
             : "Te convocaron a una tarea — revisa Mis tareas",
-      }).catch(() => {
-        // no crítico, ver comentario arriba
-      })
+      }).catch(() => {})
 
       this.publishDelta(
         { taskId: step.taskId, updated: [{ id: step.id, ...patch }] },
         actorId,
       )
-
     }
 
     return { success: true, count: steps.length }
 
+  }
+
+  /**
+   * Reasignación atómica de un step a otro operario.
+   * Equivale a unsummon (retract) + summon ASSIGN, en una sola operación.
+   * Permite PROGRESS (error humano); bloquea COMPLETED / REVIEWED.
+   */
+  async reassign(stepId: string, operatorId: string, actorId: string) {
+    return this.summon([stepId], operatorId, "ASSIGN", actorId)
   }
 
   async acceptInvite(stepId: string, userId: string) {

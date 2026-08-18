@@ -23,6 +23,7 @@ import {
 import {
   SummonWorkflowStepsDto,
 } from "./dto/summon-workflow-steps.dto"
+import { ReassignWorkflowStepDto } from "./dto/reassign-workflow-step.dto"
 
 import {
   WORKFLOW_BUSINESS,
@@ -334,6 +335,24 @@ export class WorkflowController{
       user.id,
     )
 
+  }
+
+  // Reasignar operario de un step (transfer atómico).
+  @Permissions(
+    PermissionCode.WORKFLOW_UPDATE,
+  )
+  @Post("reassign")
+  reassign(
+    @Body()
+    dto: ReassignWorkflowStepDto,
+    @CurrentUser()
+    user: CurrentUserType,
+  ) {
+    return this.workflowService.reassign(
+      dto.stepId,
+      dto.operatorId,
+      user.id,
+    )
   }
 
   // "Desconvocar" — mismo permiso que summon(), el que convocó (o

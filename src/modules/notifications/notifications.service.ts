@@ -373,6 +373,9 @@ export class NotificationsService{
     messageSnippet:string
   }){
 
+    // Autoasignación / autoconvocatoria: no campana al mismo actor.
+    if(params.operatorId===params.actorId)return
+
     await this.notificationRepository.createMany([{
       userId:params.operatorId,
       actorId:params.actorId,
