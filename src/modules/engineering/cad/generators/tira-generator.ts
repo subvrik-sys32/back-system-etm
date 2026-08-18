@@ -1,0 +1,134 @@
+import { point } from '../geometry/point'
+import { line } from '../geometry/line'
+import { circle } from '../geometry/circle'
+import { arc } from '../geometry/arc'
+import {
+  createGeometryModel,
+  type GeometryModel,
+  type GeometryEntity,
+} from '../model/geometry-model'
+
+export type TiraHolesInput = {
+  diameter: number
+  /** Distancia del centro del agujero al extremo (mm). */
+  insetFromEnd: number
+  countPerEnd: 1 | 2
+  /** Separación entre centros si countPerEnd=2 (mm). Default: width/2. */
+  spacing?: number
+}
+
+export type TiraBendsInput = {
+  /** Posiciones X desde el extremo izquierdo (mm). */
+  positions: number[]
+}
+
+export type TiraGeneratorInput = {
+  /** Largo en X (mm). */
+  length: number
+  /** Ancho en Y (mm). */
+  width: number
+  /** Radio de redondeo en extremos; 0 = esquina viva. */
+  endRadius?: number
+  holes?: TiraHolesInput
+  bends?: TiraBendsInput
+  thicknessMm?: number
+  name?: string
+}
+
+/**
+ * Tira / bisagra paramétrica (desarrollo 2D).
+ * Origen: esquina inferior izquierda (0,0). X → largo, Y → ancho.
+ */
+export function generateTira(input: TiraGeneratorInput): GeometryModel {
+  const { length, width } = input
+  if (!(length > 0) || !(width > 0)) {
+    throw new Error(`Tira length/width must be > 0 (got ${length} x ${width})`)
+  }
+
+  const R = Math.min(Math.max(input.endRadius ?? 0, 0), width / 2)
+  const entities: GeometryEntity[] = []
+
+  // Contorno exterior
+  if (R <= 0) {
+    entities.push(
+      line(point(0, 0), point(length, 0)),
+      line(point(length, 0), point(length, width)),
+      line(point(length, width), point(0, width)),
+      line(point(0, width), point(0, 0)),
+    )
+  } else {
+    // Caps semicirculares en extremos (cápsula alineada a X)
+    // Bottom edge
+    entities.push(line(point(R, 0), point(length - R, 0)))
+    // Right cap: arc from bottom to top, CCW around (length-R, width/2)
+    // Actually stadium: left center (R, width/2), right (length-R, width/2)
+    // Bottom-right arc start at angle -90 or 270, end 90
+    const cy = width / 2
+    // Right semicircle: from (length-R, 0) to (length-R, width) going through (length, cy)
+    entities.push(arc(point(length - R, cy), R, -90, 90))
+    // Top edge
+    entities.push(line(point(length - R, width), point(R, width)))
+    // Left semicircle: from (R, width) to (R, 0) through (0, cy) → angles 90 → 270
+    entities.push(arc(point(R, cy), R, 90, 270))
+  }
+
+  // Agujeros
+  if (input.holes) {
+    const { diameter, insetFromEnd, countPerEnd } = input.holes
+    if (!(diameter > 0)) {
+      throw new Error(`Hole diameter must be > 0 (got ${diameter})`)
+    }
+    if (!(insetFromEnd >= 0)) {
+      throw new Error(`insetFromEnd must be >= 0 (got ${insetFromEnd})`)
+    }
+    const r = diameter / 2
+    if (insetFromEnd - r < 0 || insetFromEnd + r > length) {
+      throw new Error(
+        `Holes do not fit on length: diameter=${diameter}, inset=${insetFromEnd}, length=${length}`,
+      )
+    }
+    const xs = [insetFromEnd, length - insetFromEnd]
+    const ys: number[] =
+      countPerEnd === 1
+        ? [width / 2]
+        : (() => {
+            const spacing = input.holes!.spacing ?? width / 2
+            const y0 = width / 2 - spacing / 2
+            const y1 = width / 2 + spacing / 2
+            if (y0 - r < 0 || y1 + r > width) {
+              throw new Error(
+                `Holes do not fit on width: diameter=${diameter}, spacing=${spacing}, width=${width}`,
+              )
+            }
+            return [y0, y1]
+          })()
+    for (const x of xs) {
+      for (const y of ys) {
+        entities.push(circle(point(x, y), r))
+      }
+    }
+  }
+
+  // Dobleces transversales (líneas de referencia, no corte)
+  if (input.bends?.positions?.length) {
+    for (const x of input.bends.positions) {
+      if (!(x > 0) || !(x < length)) {
+        throw new Error(`Bend position must be inside (0, length): got ${x}`)
+      }
+      entities.push(line(point(x, 0), point(x, width)))
+    }
+  }
+
+  return createGeometryModel(entities, 'mm')
+}
+
+/** Defaults cercanos al Sujetador_Angulo_3_L de planta. */
+export const DEFAULT_TIRA_DEMO: TiraGeneratorInput = {
+  length: 211.25,
+  width: 13.6,
+  endRadius: 7,
+  holes: { diameter: 4, insetFromEnd: 8, countPerEnd: 1 },
+  bends: { positions: [20.16, 51.97, 159.28, 191.1] },
+  thicknessMm: 1.5,
+  name: 'tira-demo',
+}

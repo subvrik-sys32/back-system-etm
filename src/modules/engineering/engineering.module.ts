@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common'
 import { EngineeringFilesController } from './controllers/engineering-files.controller'
 import { NestingProjectsController } from './controllers/nesting-projects.controller'
 import { CadPlateController } from './controllers/cad-plate.controller'
+import { CadPieceController } from './controllers/cad-piece.controller'
 import { NestingRunController } from './controllers/nesting-run.controller'
 import { EngineeringFilesService } from './services/engineering-files.service'
 import { EngineeringParserService } from './services/engineering-parser.service'
 import { EngineeringPipelineService } from './services/engineering-pipeline.service'
 import { CadPlateService } from './services/cad-plate.service'
+import { CadPieceService } from './services/cad-piece.service'
 import { NestingRunService } from './services/nesting-run.service'
 import { NestingJobService } from './services/nesting-job.service'
 import { CadParseService } from './services/cad-parse.service'
@@ -17,6 +19,7 @@ import { DxfReportService } from './pdf/dxf-report.service'
     EngineeringFilesController,
     NestingProjectsController,
     CadPlateController,
+    CadPieceController,
     NestingRunController,
   ],
   providers: [
@@ -24,6 +27,7 @@ import { DxfReportService } from './pdf/dxf-report.service'
     EngineeringParserService,
     EngineeringPipelineService,
     CadPlateService,
+    CadPieceService,
     NestingRunService,
     NestingJobService,
     CadParseService,
@@ -33,6 +37,7 @@ import { DxfReportService } from './pdf/dxf-report.service'
     DxfReportService,
     EngineeringFilesService,
     CadPlateService,
+    CadPieceService,
     NestingRunService,
     NestingJobService,
     CadParseService,
