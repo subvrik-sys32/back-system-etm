@@ -1,0 +1,563 @@
+diff --git a/src/modules/engineering/cad/adapters/geometry-to-nesting-piece.ts b/src/modules/engineering/cad/adapters/geometry-to-nesting-piece.ts
+index c2e1f30..5728c6d 100644
+--- a/src/modules/engineering/cad/adapters/geometry-to-nesting-piece.ts
++++ b/src/modules/engineering/cad/adapters/geometry-to-nesting-piece.ts
+@@ -89,12 +89,20 @@ export function geometryModelToNestingPiece(
+ 
+   const subEntities: SubEntity[] = []
+   for (const e of model.entities) {
++    const layerTag =
++      'layer' in e && typeof e.layer === 'string' && e.layer
++        ? e.layer
++        : e.type === 'CIRCLE' || e.type === 'ARC'
++          ? 'HOLE'
++          : 'CUT'
++    // Doblez no se corta en nesting
++    if (layerTag === 'BEND') continue
+     const o = entityToOutline(e)
+     if (!o || o.points.length < 2) continue
+     subEntities.push({
+       outline: o,
+-      color: e.type === 'CIRCLE' || e.type === 'ARC' ? '#f97316' : '#22c55e',
+-      layer: e.type === 'CIRCLE' || e.type === 'ARC' ? 'HOLE' : 'CUT',
++      color: layerTag === 'HOLE' || e.type === 'CIRCLE' || e.type === 'ARC' ? '#f97316' : '#22c55e',
++      layer: layerTag === 'HOLE' || e.type === 'CIRCLE' || e.type === 'ARC' ? 'HOLE' : 'CUT',
+     })
+   }
+ 
+diff --git a/src/modules/engineering/cad/exporters/dxf/dxf-exporter.ts b/src/modules/engineering/cad/exporters/dxf/dxf-exporter.ts
+index 1ef7fc0..659e97c 100644
+--- a/src/modules/engineering/cad/exporters/dxf/dxf-exporter.ts
++++ b/src/modules/engineering/cad/exporters/dxf/dxf-exporter.ts
+@@ -10,16 +10,18 @@ import type { Point2D } from '../../geometry/point'
+  *   escriben en grados como exige el formato.
+  */
+ 
+-const LAYER = '0'
+-
+ function pair(code: number, value: string | number): string {
+   return `${code}\n${value}\n`
+ }
+ 
++function entityLayer(e: { layer?: string }): string {
++  return e.layer && e.layer.length > 0 ? e.layer : '0'
++}
++
+ function writeLine(e: Extract<GeometryEntity, { type: 'LINE' }>): string {
+   return (
+     pair(0, 'LINE') +
+-    pair(8, LAYER) +
++    pair(8, entityLayer(e)) +
+     pair(10, e.start.x) +
+     pair(20, e.start.y) +
+     pair(30, 0) +
+@@ -32,7 +34,7 @@ function writeLine(e: Extract<GeometryEntity, { type: 'LINE' }>): string {
+ function writeCircle(e: Extract<GeometryEntity, { type: 'CIRCLE' }>): string {
+   return (
+     pair(0, 'CIRCLE') +
+-    pair(8, LAYER) +
++    pair(8, entityLayer(e)) +
+     pair(10, e.center.x) +
+     pair(20, e.center.y) +
+     pair(30, 0) +
+@@ -43,7 +45,7 @@ function writeCircle(e: Extract<GeometryEntity, { type: 'CIRCLE' }>): string {
+ function writeArc(e: Extract<GeometryEntity, { type: 'ARC' }>): string {
+   return (
+     pair(0, 'ARC') +
+-    pair(8, LAYER) +
++    pair(8, entityLayer(e)) +
+     pair(10, e.center.x) +
+     pair(20, e.center.y) +
+     pair(30, 0) +
+@@ -58,7 +60,7 @@ function writePolyline(e: Extract<GeometryEntity, { type: 'POLYLINE' }>): string
+   const closedFlag = e.closed ? 1 : 0
+   let out =
+     pair(0, 'LWPOLYLINE') +
+-    pair(8, LAYER) +
++    pair(8, entityLayer(e)) +
+     pair(90, e.points.length) +
+     pair(70, closedFlag)
+ 
+diff --git a/src/modules/engineering/cad/generators/index.ts b/src/modules/engineering/cad/generators/index.ts
+index b7ef724..1161b5d 100644
+--- a/src/modules/engineering/cad/generators/index.ts
++++ b/src/modules/engineering/cad/generators/index.ts
+@@ -1,2 +1,3 @@
+ export * from './plate-generator'
+ export * from './tira-generator'
++export * from './malla-generator'
+diff --git a/src/modules/engineering/cad/generators/malla-generator.ts b/src/modules/engineering/cad/generators/malla-generator.ts
+new file mode 100644
+index 0000000..82223c7
+--- /dev/null
++++ b/src/modules/engineering/cad/generators/malla-generator.ts
+@@ -0,0 +1,124 @@
++import { point } from '../geometry/point'
++import { line } from '../geometry/line'
++import { polyline } from '../geometry/polyline'
++import {
++  createGeometryModel,
++  type GeometryModel,
++  type GeometryEntity,
++} from '../model/geometry-model'
++
++export type MallaGeneratorInput = {
++  width: number
++  height: number
++  /** Margen exterior al primer hueco (mm). */
++  margin: number
++  cols: number
++  rows: number
++  /** Ancho de cada hueco rectangular. */
++  holeWidth: number
++  /** Alto de cada hueco rectangular. */
++  holeHeight: number
++  /** Separación libre entre huecos en X (si se omite, se reparte). */
++  gapX?: number
++  gapY?: number
++  thicknessMm?: number
++  material?: string
++  name?: string
++}
++
++/**
++ * Placa rectangular + grilla de recortes rectangulares (estilo BandejaPC).
++ */
++export function generateMalla(input: MallaGeneratorInput): GeometryModel {
++  const { width, height, margin, cols, rows, holeWidth, holeHeight } = input
++  if (!(width > 0) || !(height > 0)) {
++    throw new Error(`Malla size must be > 0`)
++  }
++  if (!(cols >= 1) || !(rows >= 1)) {
++    throw new Error(`cols/rows must be >= 1`)
++  }
++  if (!(holeWidth > 0) || !(holeHeight > 0)) {
++    throw new Error(`hole size must be > 0`)
++  }
++  if (!(margin >= 0)) throw new Error(`margin must be >= 0`)
++
++  const innerW = width - 2 * margin
++  const innerH = height - 2 * margin
++  if (innerW < holeWidth * cols || innerH < holeHeight * rows) {
++    throw new Error(
++      `Grid does not fit: plate ${width}x${height}, margin ${margin}, holes ${cols}x${rows} of ${holeWidth}x${holeHeight}`,
++    )
++  }
++
++  const freeX = innerW - holeWidth * cols
++  const freeY = innerH - holeHeight * rows
++  const gapX =
++    input.gapX != null
++      ? input.gapX
++      : cols > 1
++        ? freeX / (cols - 1)
++        : 0
++  const gapY =
++    input.gapY != null
++      ? input.gapY
++      : rows > 1
++        ? freeY / (rows - 1)
++        : 0
++
++  // Validate with explicit gaps
++  const needW = holeWidth * cols + gapX * Math.max(0, cols - 1)
++  const needH = holeHeight * rows + gapY * Math.max(0, rows - 1)
++  if (needW > innerW + 1e-6 || needH > innerH + 1e-6) {
++    throw new Error(
++      `Grid with gaps does not fit in margins (need ${needW.toFixed(2)}x${needH.toFixed(2)} inside ${innerW.toFixed(2)}x${innerH.toFixed(2)})`,
++    )
++  }
++
++  const entities: GeometryEntity[] = [
++    line(point(0, 0), point(width, 0), 'CUT'),
++    line(point(width, 0), point(width, height), 'CUT'),
++    line(point(width, height), point(0, height), 'CUT'),
++    line(point(0, height), point(0, 0), 'CUT'),
++  ]
++
++  // Center grid in remaining space
++  const startX = margin + (innerW - needW) / 2
++  const startY = margin + (innerH - needH) / 2
++
++  for (let r = 0; r < rows; r++) {
++    for (let c = 0; c < cols; c++) {
++      const x0 = startX + c * (holeWidth + gapX)
++      const y0 = startY + r * (holeHeight + gapY)
++      const x1 = x0 + holeWidth
++      const y1 = y0 + holeHeight
++      entities.push(
++        polyline(
++          [
++            point(x0, y0),
++            point(x1, y0),
++            point(x1, y1),
++            point(x0, y1),
++            point(x0, y0),
++          ],
++          true,
++          'HOLE',
++        ),
++      )
++    }
++  }
++
++  return createGeometryModel(entities, 'mm')
++}
++
++export const DEFAULT_MALLA_DEMO: MallaGeneratorInput = {
++  width: 320,
++  height: 220,
++  margin: 12,
++  cols: 8,
++  rows: 6,
++  holeWidth: 28,
++  holeHeight: 22,
++  thicknessMm: 1.5,
++  material: 'AlMg3',
++  name: 'malla-demo',
++}
+diff --git a/src/modules/engineering/cad/generators/tira-generator.ts b/src/modules/engineering/cad/generators/tira-generator.ts
+index d3394f7..a141a35 100644
+--- a/src/modules/engineering/cad/generators/tira-generator.ts
++++ b/src/modules/engineering/cad/generators/tira-generator.ts
+@@ -10,35 +10,26 @@ import {
+ 
+ export type TiraHolesInput = {
+   diameter: number
+-  /** Distancia del centro del agujero al extremo (mm). */
+   insetFromEnd: number
+   countPerEnd: 1 | 2
+-  /** Separación entre centros si countPerEnd=2 (mm). Default: width/2. */
+   spacing?: number
+ }
+ 
+ export type TiraBendsInput = {
+-  /** Posiciones X desde el extremo izquierdo (mm). */
+   positions: number[]
+ }
+ 
+ export type TiraGeneratorInput = {
+-  /** Largo en X (mm). */
+   length: number
+-  /** Ancho en Y (mm). */
+   width: number
+-  /** Radio de redondeo en extremos; 0 = esquina viva. */
+   endRadius?: number
+   holes?: TiraHolesInput
+   bends?: TiraBendsInput
+   thicknessMm?: number
++  material?: string
+   name?: string
+ }
+ 
+-/**
+- * Tira / bisagra paramétrica (desarrollo 2D).
+- * Origen: esquina inferior izquierda (0,0). X → largo, Y → ancho.
+- */
+ export function generateTira(input: TiraGeneratorInput): GeometryModel {
+   const { length, width } = input
+   if (!(length > 0) || !(width > 0)) {
+@@ -48,43 +39,29 @@ export function generateTira(input: TiraGeneratorInput): GeometryModel {
+   const R = Math.min(Math.max(input.endRadius ?? 0, 0), width / 2)
+   const entities: GeometryEntity[] = []
+ 
+-  // Contorno exterior
+   if (R <= 0) {
+     entities.push(
+-      line(point(0, 0), point(length, 0)),
+-      line(point(length, 0), point(length, width)),
+-      line(point(length, width), point(0, width)),
+-      line(point(0, width), point(0, 0)),
++      line(point(0, 0), point(length, 0), 'CUT'),
++      line(point(length, 0), point(length, width), 'CUT'),
++      line(point(length, width), point(0, width), 'CUT'),
++      line(point(0, width), point(0, 0), 'CUT'),
+     )
+   } else {
+-    // Caps semicirculares en extremos (cápsula alineada a X)
+-    // Bottom edge
+-    entities.push(line(point(R, 0), point(length - R, 0)))
+-    // Right cap: arc from bottom to top, CCW around (length-R, width/2)
+-    // Actually stadium: left center (R, width/2), right (length-R, width/2)
+-    // Bottom-right arc start at angle -90 or 270, end 90
+     const cy = width / 2
+-    // Right semicircle: from (length-R, 0) to (length-R, width) going through (length, cy)
++    entities.push(line(point(R, 0), point(length - R, 0), 'CUT'))
+     entities.push(arc(point(length - R, cy), R, -90, 90))
+-    // Top edge
+-    entities.push(line(point(length - R, width), point(R, width)))
+-    // Left semicircle: from (R, width) to (R, 0) through (0, cy) → angles 90 → 270
++    entities.push(line(point(length - R, width), point(R, width), 'CUT'))
+     entities.push(arc(point(R, cy), R, 90, 270))
+   }
+ 
+-  // Agujeros
+   if (input.holes) {
+     const { diameter, insetFromEnd, countPerEnd } = input.holes
+-    if (!(diameter > 0)) {
+-      throw new Error(`Hole diameter must be > 0 (got ${diameter})`)
+-    }
+-    if (!(insetFromEnd >= 0)) {
+-      throw new Error(`insetFromEnd must be >= 0 (got ${insetFromEnd})`)
+-    }
++    if (!(diameter > 0)) throw new Error(`Hole diameter must be > 0`)
++    if (!(insetFromEnd >= 0)) throw new Error(`insetFromEnd must be >= 0`)
+     const r = diameter / 2
+     if (insetFromEnd - r < 0 || insetFromEnd + r > length) {
+       throw new Error(
+-        `Holes do not fit on length: diameter=${diameter}, inset=${insetFromEnd}, length=${length}`,
++        `Holes do not fit on length: d=${diameter}, inset=${insetFromEnd}, L=${length}`,
+       )
+     }
+     const xs = [insetFromEnd, length - insetFromEnd]
+@@ -97,38 +74,37 @@ export function generateTira(input: TiraGeneratorInput): GeometryModel {
+             const y1 = width / 2 + spacing / 2
+             if (y0 - r < 0 || y1 + r > width) {
+               throw new Error(
+-                `Holes do not fit on width: diameter=${diameter}, spacing=${spacing}, width=${width}`,
++                `Holes do not fit on width: d=${diameter}, spacing=${spacing}, W=${width}`,
+               )
+             }
+             return [y0, y1]
+           })()
+     for (const x of xs) {
+       for (const y of ys) {
+-        entities.push(circle(point(x, y), r))
++        entities.push(circle(point(x, y), r, 'HOLE'))
+       }
+     }
+   }
+ 
+-  // Dobleces transversales (líneas de referencia, no corte)
+   if (input.bends?.positions?.length) {
+     for (const x of input.bends.positions) {
+       if (!(x > 0) || !(x < length)) {
+-        throw new Error(`Bend position must be inside (0, length): got ${x}`)
++        throw new Error(`Bend position must be inside (0, length): ${x}`)
+       }
+-      entities.push(line(point(x, 0), point(x, width)))
++      entities.push(line(point(x, 0), point(x, width), 'BEND'))
+     }
+   }
+ 
+   return createGeometryModel(entities, 'mm')
+ }
+ 
+-/** Defaults cercanos al Sujetador_Angulo_3_L de planta. */
+ export const DEFAULT_TIRA_DEMO: TiraGeneratorInput = {
+   length: 211.25,
+   width: 13.6,
+-  endRadius: 7,
++  endRadius: 3,
+   holes: { diameter: 4, insetFromEnd: 8, countPerEnd: 1 },
+   bends: { positions: [20.16, 51.97, 159.28, 191.1] },
+   thicknessMm: 1.5,
++  material: 'St37',
+   name: 'tira-demo',
+ }
+diff --git a/src/modules/engineering/cad/geometry/circle.ts b/src/modules/engineering/cad/geometry/circle.ts
+index 8fdc43a..183f7de 100644
+--- a/src/modules/engineering/cad/geometry/circle.ts
++++ b/src/modules/engineering/cad/geometry/circle.ts
+@@ -4,11 +4,18 @@ export type Circle2D = {
+   type: 'CIRCLE'
+   center: Point2D
+   radius: number
++  layer?: string
+ }
+ 
+-export function circle(center: Point2D, radius: number): Circle2D {
++export function circle(
++  center: Point2D,
++  radius: number,
++  layer?: string,
++): Circle2D {
+   if (!(radius > 0)) {
+     throw new Error(`Circle radius must be > 0, got ${radius}`)
+   }
+-  return { type: 'CIRCLE', center, radius }
++  return layer
++    ? { type: 'CIRCLE', center, radius, layer }
++    : { type: 'CIRCLE', center, radius }
+ }
+diff --git a/src/modules/engineering/cad/geometry/line.ts b/src/modules/engineering/cad/geometry/line.ts
+index 7edeee8..bdebf9c 100644
+--- a/src/modules/engineering/cad/geometry/line.ts
++++ b/src/modules/engineering/cad/geometry/line.ts
+@@ -4,8 +4,16 @@ export type Line2D = {
+   type: 'LINE'
+   start: Point2D
+   end: Point2D
++  /** CUT | BEND | HOLE — capa DXF; omit = "0" */
++  layer?: string
+ }
+ 
+-export function line(start: Point2D, end: Point2D): Line2D {
+-  return { type: 'LINE', start, end }
++export function line(
++  start: Point2D,
++  end: Point2D,
++  layer?: string,
++): Line2D {
++  return layer
++    ? { type: 'LINE', start, end, layer }
++    : { type: 'LINE', start, end }
+ }
+diff --git a/src/modules/engineering/cad/geometry/polyline.ts b/src/modules/engineering/cad/geometry/polyline.ts
+index c50fc25..4c7b790 100644
+--- a/src/modules/engineering/cad/geometry/polyline.ts
++++ b/src/modules/engineering/cad/geometry/polyline.ts
+@@ -4,11 +4,18 @@ export type Polyline2D = {
+   type: 'POLYLINE'
+   points: Point2D[]
+   closed: boolean
++  layer?: string
+ }
+ 
+-export function polyline(points: Point2D[], closed = false): Polyline2D {
++export function polyline(
++  points: Point2D[],
++  closed = false,
++  layer?: string,
++): Polyline2D {
+   if (points.length < 2) {
+     throw new Error('Polyline requires at least 2 points')
+   }
+-  return { type: 'POLYLINE', points, closed }
++  return layer
++    ? { type: 'POLYLINE', points, closed, layer }
++    : { type: 'POLYLINE', points, closed }
+ }
+diff --git a/src/modules/engineering/controllers/cad-piece.controller.ts b/src/modules/engineering/controllers/cad-piece.controller.ts
+index 18f8f93..6416dc1 100644
+--- a/src/modules/engineering/controllers/cad-piece.controller.ts
++++ b/src/modules/engineering/controllers/cad-piece.controller.ts
+@@ -7,13 +7,13 @@ import {
+   UsePipes,
+   ValidationPipe,
+ } from '@nestjs/common'
+-import { CadPieceService, type CreateTiraDto } from '../services/cad-piece.service'
++import { CadPieceService, type CreatePieceDto } from '../services/cad-piece.service'
+ import type { GeometryModel } from '../cad/model/geometry-model'
+ import type { NestingPiece } from '../nesting/engine/types'
+ 
+ /**
+  * POST /engineering/cad/piece
+- * Body: TiraSpec (template implícito tira en V1)
++ * Body: { template: "tira" | "malla" | "plate", ...params }
+  * ?format=json | dxf | piece
+  */
+ @Controller('engineering/cad/piece')
+@@ -23,7 +23,7 @@ export class CadPieceController {
+   @Post()
+   @UsePipes(new ValidationPipe({ transform: true, whitelist: false }))
+   generate(
+-    @Body() body: CreateTiraDto,
++    @Body() body: CreatePieceDto,
+     @Query('format') format?: string,
+   ): GeometryModel | NestingPiece | StreamableFile {
+     const fmt = (format ?? 'json').toLowerCase()
+@@ -32,7 +32,7 @@ export class CadPieceController {
+       const buf = Buffer.from(text, 'utf8')
+       return new StreamableFile(buf, {
+         type: 'application/dxf',
+-        disposition: `attachment; filename="tira.dxf"`,
++        disposition: `attachment; filename="piece.dxf"`,
+       })
+     }
+     if (fmt === 'piece') {
+diff --git a/src/modules/engineering/services/cad-piece.service.ts b/src/modules/engineering/services/cad-piece.service.ts
+index 2db71d5..dc62ac7 100644
+--- a/src/modules/engineering/services/cad-piece.service.ts
++++ b/src/modules/engineering/services/cad-piece.service.ts
+@@ -3,47 +3,71 @@ import {
+   generateTira,
+   type TiraGeneratorInput,
+ } from '../cad/generators/tira-generator'
++import {
++  generateMalla,
++  type MallaGeneratorInput,
++} from '../cad/generators/malla-generator'
++import { generatePlate, type PlateGeneratorInput } from '../cad/generators/plate-generator'
+ import { exportGeometryToDxf } from '../cad/exporters/dxf/dxf-exporter'
+ import { geometryModelToNestingPiece } from '../cad/adapters/geometry-to-nesting-piece'
+ import type { GeometryModel } from '../cad/model/geometry-model'
+ import type { NestingPiece } from '../nesting/engine/types'
+ 
+-export type CreateTiraDto = TiraGeneratorInput
++export type CadTemplate = 'tira' | 'malla' | 'plate'
++
++export type CreatePieceDto =
++  | ({ template: 'tira' } & TiraGeneratorInput)
++  | ({ template: 'malla' } & MallaGeneratorInput)
++  | ({ template: 'plate' } & PlateGeneratorInput)
++  | (TiraGeneratorInput & { template?: undefined }) // legacy tira sin template
+ 
+ @Injectable()
+ export class CadPieceService {
+-  buildModel(dto: CreateTiraDto): GeometryModel {
+-    this.assertDto(dto)
++  buildModel(dto: CreatePieceDto): GeometryModel {
++    if (dto == null || typeof dto !== 'object') {
++      throw new BadRequestException('Body is required')
++    }
++    const template: CadTemplate =
++      dto.template === 'malla' || dto.template === 'plate' || dto.template === 'tira'
++        ? dto.template
++        : 'tira'
++
+     try {
+-      return generateTira(dto)
++      if (template === 'malla') {
++        return generateMalla(dto as MallaGeneratorInput)
++      }
++      if (template === 'plate') {
++        const p = dto as PlateGeneratorInput
++        if (typeof p.width !== 'number' || typeof p.height !== 'number') {
++          throw new Error('plate requires width and height')
++        }
++        return generatePlate(p)
++      }
++      const t = dto as TiraGeneratorInput
++      if (typeof t.length !== 'number' || typeof t.width !== 'number') {
++        throw new Error('tira requires length and width')
++      }
++      return generateTira(t)
+     } catch (e) {
+       throw new BadRequestException(
+-        e instanceof Error ? e.message : 'Invalid tira params',
++        e instanceof Error ? e.message : 'Invalid piece params',
+       )
+     }
+   }
+ 
+-  buildDxf(dto: CreateTiraDto): string {
++  buildDxf(dto: CreatePieceDto): string {
+     return exportGeometryToDxf(this.buildModel(dto))
+   }
+ 
+-  buildNestingPiece(dto: CreateTiraDto): NestingPiece {
++  buildNestingPiece(dto: CreatePieceDto): NestingPiece {
+     const model = this.buildModel(dto)
++    const anyDto = dto as { name?: string; length?: number; width?: number; height?: number; thicknessMm?: number; template?: string }
+     const label =
+-      dto.name?.trim() ||
+-      `tira-${dto.length}x${dto.width}`
++      anyDto.name?.trim() ||
++      `${anyDto.template ?? 'tira'}-${anyDto.length ?? anyDto.width}x${anyDto.width ?? anyDto.height}`
+     return geometryModelToNestingPiece(model, {
+       id: `${label}-${Date.now()}`,
+-      thicknessMm: dto.thicknessMm,
++      thicknessMm: anyDto.thicknessMm,
+     })
+   }
+-
+-  private assertDto(dto: CreateTiraDto): void {
+-    if (dto == null || typeof dto !== 'object') {
+-      throw new BadRequestException('Body is required')
+-    }
+-    if (typeof dto.length !== 'number' || typeof dto.width !== 'number') {
+-      throw new BadRequestException('length and width must be numbers')
+-    }
+-  }
+ }

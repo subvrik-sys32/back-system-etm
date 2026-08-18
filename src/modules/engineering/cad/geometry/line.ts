@@ -4,8 +4,16 @@ export type Line2D = {
   type: 'LINE'
   start: Point2D
   end: Point2D
+  /** CUT | BEND | HOLE — capa DXF; omit = "0" */
+  layer?: string
 }
 
-export function line(start: Point2D, end: Point2D): Line2D {
-  return { type: 'LINE', start, end }
+export function line(
+  start: Point2D,
+  end: Point2D,
+  layer?: string,
+): Line2D {
+  return layer
+    ? { type: 'LINE', start, end, layer }
+    : { type: 'LINE', start, end }
 }

@@ -89,12 +89,20 @@ export function geometryModelToNestingPiece(
 
   const subEntities: SubEntity[] = []
   for (const e of model.entities) {
+    const layerTag =
+      'layer' in e && typeof e.layer === 'string' && e.layer
+        ? e.layer
+        : e.type === 'CIRCLE' || e.type === 'ARC'
+          ? 'HOLE'
+          : 'CUT'
+    // Doblez no se corta en nesting
+    if (layerTag === 'BEND') continue
     const o = entityToOutline(e)
     if (!o || o.points.length < 2) continue
     subEntities.push({
       outline: o,
-      color: e.type === 'CIRCLE' || e.type === 'ARC' ? '#f97316' : '#22c55e',
-      layer: e.type === 'CIRCLE' || e.type === 'ARC' ? 'HOLE' : 'CUT',
+      color: layerTag === 'HOLE' || e.type === 'CIRCLE' || e.type === 'ARC' ? '#f97316' : '#22c55e',
+      layer: layerTag === 'HOLE' || e.type === 'CIRCLE' || e.type === 'ARC' ? 'HOLE' : 'CUT',
     })
   }
 

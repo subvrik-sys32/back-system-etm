@@ -10,16 +10,18 @@ import type { Point2D } from '../../geometry/point'
  *   escriben en grados como exige el formato.
  */
 
-const LAYER = '0'
-
 function pair(code: number, value: string | number): string {
   return `${code}\n${value}\n`
+}
+
+function entityLayer(e: { layer?: string }): string {
+  return e.layer && e.layer.length > 0 ? e.layer : '0'
 }
 
 function writeLine(e: Extract<GeometryEntity, { type: 'LINE' }>): string {
   return (
     pair(0, 'LINE') +
-    pair(8, LAYER) +
+    pair(8, entityLayer(e)) +
     pair(10, e.start.x) +
     pair(20, e.start.y) +
     pair(30, 0) +
@@ -32,7 +34,7 @@ function writeLine(e: Extract<GeometryEntity, { type: 'LINE' }>): string {
 function writeCircle(e: Extract<GeometryEntity, { type: 'CIRCLE' }>): string {
   return (
     pair(0, 'CIRCLE') +
-    pair(8, LAYER) +
+    pair(8, entityLayer(e)) +
     pair(10, e.center.x) +
     pair(20, e.center.y) +
     pair(30, 0) +
@@ -43,7 +45,7 @@ function writeCircle(e: Extract<GeometryEntity, { type: 'CIRCLE' }>): string {
 function writeArc(e: Extract<GeometryEntity, { type: 'ARC' }>): string {
   return (
     pair(0, 'ARC') +
-    pair(8, LAYER) +
+    pair(8, entityLayer(e)) +
     pair(10, e.center.x) +
     pair(20, e.center.y) +
     pair(30, 0) +
@@ -58,7 +60,7 @@ function writePolyline(e: Extract<GeometryEntity, { type: 'POLYLINE' }>): string
   const closedFlag = e.closed ? 1 : 0
   let out =
     pair(0, 'LWPOLYLINE') +
-    pair(8, LAYER) +
+    pair(8, entityLayer(e)) +
     pair(90, e.points.length) +
     pair(70, closedFlag)
 

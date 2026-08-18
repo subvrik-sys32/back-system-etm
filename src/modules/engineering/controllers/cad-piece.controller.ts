@@ -7,13 +7,13 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common'
-import { CadPieceService, type CreateTiraDto } from '../services/cad-piece.service'
+import { CadPieceService, type CreatePieceDto } from '../services/cad-piece.service'
 import type { GeometryModel } from '../cad/model/geometry-model'
 import type { NestingPiece } from '../nesting/engine/types'
 
 /**
  * POST /engineering/cad/piece
- * Body: TiraSpec (template implícito tira en V1)
+ * Body: { template: "tira" | "malla" | "plate", ...params }
  * ?format=json | dxf | piece
  */
 @Controller('engineering/cad/piece')
@@ -23,7 +23,7 @@ export class CadPieceController {
   @Post()
   @UsePipes(new ValidationPipe({ transform: true, whitelist: false }))
   generate(
-    @Body() body: CreateTiraDto,
+    @Body() body: CreatePieceDto,
     @Query('format') format?: string,
   ): GeometryModel | NestingPiece | StreamableFile {
     const fmt = (format ?? 'json').toLowerCase()
@@ -32,7 +32,7 @@ export class CadPieceController {
       const buf = Buffer.from(text, 'utf8')
       return new StreamableFile(buf, {
         type: 'application/dxf',
-        disposition: `attachment; filename="tira.dxf"`,
+        disposition: `attachment; filename="piece.dxf"`,
       })
     }
     if (fmt === 'piece') {
