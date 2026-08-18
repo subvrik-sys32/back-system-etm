@@ -10,6 +10,7 @@ export type Arc2D = {
   radius: number
   startAngle: number
   endAngle: number
+  layer?: string
 }
 
 export function arc(
@@ -17,9 +18,12 @@ export function arc(
   radius: number,
   startAngle: number,
   endAngle: number,
+  layer?: string,
 ): Arc2D {
   if (!(radius > 0)) {
     throw new Error(`Arc radius must be > 0, got ${radius}`)
   }
-  return { type: 'ARC', center, radius, startAngle, endAngle }
+  return layer
+    ? { type: 'ARC', center, radius, startAngle, endAngle, layer }
+    : { type: 'ARC', center, radius, startAngle, endAngle }
 }

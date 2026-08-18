@@ -36,7 +36,14 @@ export function generateTira(input: TiraGeneratorInput): GeometryModel {
     throw new Error(`Tira length/width must be > 0 (got ${length} x ${width})`)
   }
 
-  const R = Math.min(Math.max(input.endRadius ?? 0, 0), width / 2)
+  const rawR = input.endRadius ?? 0
+  if (rawR < 0) throw new Error(`endRadius must be >= 0 (got ${rawR})`)
+  if (rawR > width / 2 + 1e-9) {
+    throw new Error(
+      `endRadius (${rawR}) cannot exceed width/2 (${width / 2}) — adjust radius or width`,
+    )
+  }
+  const R = rawR
   const entities: GeometryEntity[] = []
 
   if (R <= 0) {
@@ -49,9 +56,9 @@ export function generateTira(input: TiraGeneratorInput): GeometryModel {
   } else {
     const cy = width / 2
     entities.push(line(point(R, 0), point(length - R, 0), 'CUT'))
-    entities.push(arc(point(length - R, cy), R, -90, 90))
+    entities.push(arc(point(length - R, cy), R, -90, 90, 'CUT'))
     entities.push(line(point(length - R, width), point(R, width), 'CUT'))
-    entities.push(arc(point(R, cy), R, 90, 270))
+    entities.push(arc(point(R, cy), R, 90, 270, 'CUT'))
   }
 
   if (input.holes) {
