@@ -7,7 +7,14 @@ import { CreateEngineeringTaskDto } from "./dto/create-engineering-task.dto"
 import { UpdateEngineeringTaskDto } from "./dto/update-engineering-task.dto"
 
 const include = {
-  project: { select: { id: true, projectCode: true, name: true } },
+  project: {
+    select: {
+      id: true,
+      projectCode: true,
+      name: true,
+      client: { select: { id: true, name: true, color: true } },
+    },
+  },
   assignee: { select: { id: true, name: true, color: true, icon: true } },
 } as const
 
