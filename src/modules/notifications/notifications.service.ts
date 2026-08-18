@@ -57,11 +57,14 @@ export class NotificationsService{
       route:{
 
         module:
-          notification.workflowStep
-            ?"processes"
-            :notification.task
-              ?"tasks"
-              :"projects",
+          notification.type==="ENGINEERING_TASK_ASSIGNED" ||
+          (notification as { engineeringTaskId?: string | null }).engineeringTaskId
+            ?"engineering"
+            :notification.workflowStep
+              ?"processes"
+              :notification.task
+                ?"tasks"
+                :"projects",
 
         processCode:
           notification.workflowStep?.processCode,
@@ -69,6 +72,11 @@ export class NotificationsService{
         history,
 
       },
+
+      // Front deep-link de ingeniería usa taskId = engineeringTaskId
+      taskId:
+        (notification as { engineeringTaskId?: string | null }).engineeringTaskId
+          ?? notification.taskId,
 
     }
 
@@ -520,6 +528,63 @@ export class NotificationsService{
 
     return { success:true }
 
+  }
+
+
+  /** Asignación de tarea de ingeniería → campana del ingeniero. */
+  async notifyEngineeringTaskAssigned(params:{
+    assigneeId:string
+    actorId:string
+    engineeringTaskId:string
+    projectId:string
+    messageSnippet:string
+  }){
+    if(params.assigneeId===params.actorId)return
+
+    await this.notificationRepository.createMany([{
+      userId:params.assigneeId,
+      actorId:params.actorId,
+      type:"ENGINEERING_TASK_ASSIGNED",
+      taskId:null,
+      projectId:params.projectId,
+      workflowStepId:null,
+      commentId:null,
+      engineeringTaskId:params.engineeringTaskId,
+      messageSnippet:params.messageSnippet,
+    }])
+
+    const [created]=await this.notificationRepository.findManyByEngineeringTaskAndUser(
+      params.engineeringTaskId,
+      params.assigneeId,
+    )
+
+    if(created){
+      this.realtime.publishToUser(created.userId,{
+        entity:"NOTIFICATION",
+        action:"CREATED",
+        id:created.id,
+        payload:this.enrichNotification(created),
+      })
+    }
+  }
+
+  /** Desasignar / reasignar: quita ENGINEERING_TASK_ASSIGNED del anterior. */
+  async retractEngineeringTaskAssigned(
+    engineeringTaskId:string,
+    userId:string,
+  ){
+    const deleted=await this.notificationRepository.findAndDeleteEngineeringAssignmentNotifications(
+      engineeringTaskId,
+      userId,
+    )
+    for(const notification of deleted){
+      this.realtime.publishToUser(userId,{
+        entity:"NOTIFICATION",
+        action:"DELETED",
+        id:notification.id,
+        payload:{ id:notification.id },
+      })
+    }
   }
 
 }

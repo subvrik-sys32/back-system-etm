@@ -1,0 +1,383 @@
+diff --git a/prisma/migrations/20260818120000_engineering_task_assigned_notification/migration.sql b/prisma/migrations/20260818120000_engineering_task_assigned_notification/migration.sql
+new file mode 100644
+index 0000000..827b7b1
+--- /dev/null
++++ b/prisma/migrations/20260818120000_engineering_task_assigned_notification/migration.sql
+@@ -0,0 +1,18 @@
++-- AlterEnum
++ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'ENGINEERING_TASK_ASSIGNED';
++
++-- AlterTable
++ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "engineeringTaskId" TEXT;
++
++-- CreateIndex
++CREATE INDEX IF NOT EXISTS "Notification_userId_read_engineeringTaskId_idx" ON "Notification"("userId", "read", "engineeringTaskId");
++
++-- AddForeignKey
++DO $$ BEGIN
++  ALTER TABLE "Notification"
++    ADD CONSTRAINT "Notification_engineeringTaskId_fkey"
++    FOREIGN KEY ("engineeringTaskId") REFERENCES "EngineeringTask"("id")
++    ON DELETE CASCADE ON UPDATE CASCADE;
++EXCEPTION
++  WHEN duplicate_object THEN null;
++END $$;
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 310ee4b..f5a88b3 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -230,22 +230,25 @@ model Notification {
+   // (TASK_ASSIGNED, TASK_SUMMONED) no nacen de un comentario, así
+   // que este campo pasa a nullable — el resto de las notificaciones
+   // existentes (MENTION, COMMENT) lo siguen llenando igual que antes.
+-  commentId      String?
+-  messageSnippet String
+-  read           Boolean          @default(false)
+-  createdAt      DateTime         @default(now())
+-  user           User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+-  actor          User             @relation("NotificationActor", fields: [actorId], references: [id])
+-  task           Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+-  project        Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+-  workflowStep   WorkflowStep?    @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+-  comment        Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
++  commentId          String?
++  engineeringTaskId  String?
++  messageSnippet     String
++  read               Boolean          @default(false)
++  createdAt          DateTime         @default(now())
++  user               User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
++  actor              User             @relation("NotificationActor", fields: [actorId], references: [id])
++  task               Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
++  project            Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
++  workflowStep       WorkflowStep?    @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
++  comment            Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
++  engineeringTask    EngineeringTask? @relation(fields: [engineeringTaskId], references: [id], onDelete: Cascade)
+ 
+   @@index([userId, read])
+   @@index([commentId])
+   @@index([userId, read, taskId])
+   @@index([userId, read, workflowStepId])
+   @@index([userId, read, projectId])
++  @@index([userId, read, engineeringTaskId])
+ }
+ 
+ enum NotificationType {
+@@ -264,6 +267,8 @@ enum NotificationType {
+   // convocante no se enteraba de la respuesta.
+   TASK_INVITE_ACCEPTED
+   TASK_INVITE_DECLINED
++  // Asignación de tarea de ingeniería (assigneeId en EngineeringTask).
++  ENGINEERING_TASK_ASSIGNED
+ }
+ 
+ model Priority {
+@@ -646,10 +651,11 @@ model EngineeringTask {
+   createdAt   DateTime                 @default(now())
+   updatedAt   DateTime                 @updatedAt
+ 
+-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+-  assignee  User?   @relation("EngineeringTaskAssignee", fields: [assigneeId], references: [id])
+-  createdBy User    @relation("EngineeringTaskCreatedBy", fields: [createdById], references: [id])
+-  updatedBy User    @relation("EngineeringTaskUpdatedBy", fields: [updatedById], references: [id])
++  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
++  assignee       User?          @relation("EngineeringTaskAssignee", fields: [assigneeId], references: [id])
++  createdBy      User           @relation("EngineeringTaskCreatedBy", fields: [createdById], references: [id])
++  updatedBy      User           @relation("EngineeringTaskUpdatedBy", fields: [updatedById], references: [id])
++  notifications  Notification[]
+ 
+   @@index([projectId])
+   @@index([processCode])
+diff --git a/src/modules/engineering-tasks/engineering-tasks.module.ts b/src/modules/engineering-tasks/engineering-tasks.module.ts
+index 46f0bfb..49ad094 100644
+--- a/src/modules/engineering-tasks/engineering-tasks.module.ts
++++ b/src/modules/engineering-tasks/engineering-tasks.module.ts
+@@ -3,9 +3,10 @@ import { Module } from "@nestjs/common"
+ import { EngineeringTasksController } from "./engineering-tasks.controller"
+ import { EngineeringTasksService } from "./engineering-tasks.service"
+ import { PrismaModule } from "@/infra/database/prisma/prisma.module"
++import { NotificationsModule } from "@/modules/notifications/notifications.module"
+ 
+ @Module({
+-  imports: [PrismaModule],
++  imports: [PrismaModule, NotificationsModule],
+   controllers: [EngineeringTasksController],
+   providers: [EngineeringTasksService],
+   exports: [EngineeringTasksService],
+diff --git a/src/modules/engineering-tasks/engineering-tasks.service.ts b/src/modules/engineering-tasks/engineering-tasks.service.ts
+index 82928d8..8adc458 100644
+--- a/src/modules/engineering-tasks/engineering-tasks.service.ts
++++ b/src/modules/engineering-tasks/engineering-tasks.service.ts
+@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common"
+ import { EngineeringProcessCode } from "@prisma/client"
+ 
+ import { PrismaService } from "@/infra/database/prisma/prisma.service"
++import { NotificationsService } from "@/modules/notifications/notifications.service"
+ 
+ import { CreateEngineeringTaskDto } from "./dto/create-engineering-task.dto"
+ import { UpdateEngineeringTaskDto } from "./dto/update-engineering-task.dto"
+@@ -20,7 +21,10 @@ const include = {
+ 
+ @Injectable()
+ export class EngineeringTasksService {
+-  constructor(private readonly prisma: PrismaService) {}
++  constructor(
++    private readonly prisma: PrismaService,
++    private readonly notifications: NotificationsService,
++  ) {}
+ 
+   findAll(filters: {
+     projectId?: string
+@@ -58,7 +62,7 @@ export class EngineeringTasksService {
+     })
+     const taskNumber = (max._max.taskNumber ?? 0) + 1
+ 
+-    return this.prisma.engineeringTask.create({
++    const row = await this.prisma.engineeringTask.create({
+       data: {
+         taskNumber,
+         title: dto.title,
+@@ -71,11 +75,26 @@ export class EngineeringTasksService {
+       },
+       include,
+     })
++
++    if (dto.assigneeId) {
++      await this.notifications
++        .notifyEngineeringTaskAssigned({
++          assigneeId: dto.assigneeId,
++          actorId: userId,
++          engineeringTaskId: row.id,
++          projectId: row.projectId,
++          messageSnippet: `#${String(row.taskNumber).padStart(3, "0")} · ${row.title}`,
++        })
++        .catch(() => {})
++    }
++
++    return row
+   }
+ 
+   async update(id: string, dto: UpdateEngineeringTaskDto, userId: string) {
+-    await this.findOne(id)
+-    return this.prisma.engineeringTask.update({
++    const prev = await this.findOne(id)
++
++    const row = await this.prisma.engineeringTask.update({
+       where: { id },
+       data: {
+         ...dto,
+@@ -83,16 +102,48 @@ export class EngineeringTasksService {
+       },
+       include,
+     })
++
++    // Solo si el DTO toca assigneeId
++    if (Object.prototype.hasOwnProperty.call(dto, "assigneeId")) {
++      const nextId = dto.assigneeId ?? null
++      const prevId = prev.assigneeId ?? null
++
++      if (prevId && prevId !== nextId) {
++        await this.notifications
++          .retractEngineeringTaskAssigned(id, prevId)
++          .catch(() => {})
++      }
++
++      if (nextId && nextId !== prevId) {
++        await this.notifications
++          .notifyEngineeringTaskAssigned({
++            assigneeId: nextId,
++            actorId: userId,
++            engineeringTaskId: row.id,
++            projectId: row.projectId,
++            messageSnippet: `#${String(row.taskNumber).padStart(3, "0")} · ${row.title}`,
++          })
++          .catch(() => {})
++      }
++    }
++
++    return row
+   }
+ 
+   async remove(id: string, userId: string) {
+-    await this.findOne(id)
++    const prev = await this.findOne(id)
++    if (prev.assigneeId) {
++      await this.notifications
++        .retractEngineeringTaskAssigned(id, prev.assigneeId)
++        .catch(() => {})
++    }
+     return this.prisma.engineeringTask.update({
+       where: { id },
+       data: {
+         deletedAt: new Date(),
+         updatedById: userId,
+       },
++      include,
+     })
+   }
+ }
+diff --git a/src/modules/notifications/notifications.service.ts b/src/modules/notifications/notifications.service.ts
+index 0ca2564..3cf4ea7 100644
+--- a/src/modules/notifications/notifications.service.ts
++++ b/src/modules/notifications/notifications.service.ts
+@@ -57,11 +57,14 @@ export class NotificationsService{
+       route:{
+ 
+         module:
+-          notification.workflowStep
+-            ?"processes"
+-            :notification.task
+-              ?"tasks"
+-              :"projects",
++          notification.type==="ENGINEERING_TASK_ASSIGNED" ||
++          (notification as { engineeringTaskId?: string | null }).engineeringTaskId
++            ?"engineering"
++            :notification.workflowStep
++              ?"processes"
++              :notification.task
++                ?"tasks"
++                :"projects",
+ 
+         processCode:
+           notification.workflowStep?.processCode,
+@@ -70,6 +73,11 @@ export class NotificationsService{
+ 
+       },
+ 
++      // Front deep-link de ingeniería usa taskId = engineeringTaskId
++      taskId:
++        (notification as { engineeringTaskId?: string | null }).engineeringTaskId
++          ?? notification.taskId,
++
+     }
+ 
+   }
+@@ -522,4 +530,61 @@ export class NotificationsService{
+ 
+   }
+ 
+-}
+\ No newline at end of file
++
++  /** Asignación de tarea de ingeniería → campana del ingeniero. */
++  async notifyEngineeringTaskAssigned(params:{
++    assigneeId:string
++    actorId:string
++    engineeringTaskId:string
++    projectId:string
++    messageSnippet:string
++  }){
++    if(params.assigneeId===params.actorId)return
++
++    await this.notificationRepository.createMany([{
++      userId:params.assigneeId,
++      actorId:params.actorId,
++      type:"ENGINEERING_TASK_ASSIGNED",
++      taskId:null,
++      projectId:params.projectId,
++      workflowStepId:null,
++      commentId:null,
++      engineeringTaskId:params.engineeringTaskId,
++      messageSnippet:params.messageSnippet,
++    }])
++
++    const [created]=await this.notificationRepository.findManyByEngineeringTaskAndUser(
++      params.engineeringTaskId,
++      params.assigneeId,
++    )
++
++    if(created){
++      this.realtime.publishToUser(created.userId,{
++        entity:"NOTIFICATION",
++        action:"CREATED",
++        id:created.id,
++        payload:this.enrichNotification(created),
++      })
++    }
++  }
++
++  /** Desasignar / reasignar: quita ENGINEERING_TASK_ASSIGNED del anterior. */
++  async retractEngineeringTaskAssigned(
++    engineeringTaskId:string,
++    userId:string,
++  ){
++    const deleted=await this.notificationRepository.findAndDeleteEngineeringAssignmentNotifications(
++      engineeringTaskId,
++      userId,
++    )
++    for(const notification of deleted){
++      this.realtime.publishToUser(userId,{
++        entity:"NOTIFICATION",
++        action:"DELETED",
++        id:notification.id,
++        payload:{ id:notification.id },
++      })
++    }
++  }
++
++}
+diff --git a/src/modules/notifications/repositories/notification.repository.ts b/src/modules/notifications/repositories/notification.repository.ts
+index 9fa411c..7751745 100644
+--- a/src/modules/notifications/repositories/notification.repository.ts
++++ b/src/modules/notifications/repositories/notification.repository.ts
+@@ -83,13 +83,21 @@ export class NotificationRepository{
+   createMany(data:({
+     userId:string
+     actorId:string
+-    type:"MENTION"|"COMMENT"|"TASK_ASSIGNED"|"TASK_SUMMONED"|"TASK_INVITE_ACCEPTED"|"TASK_INVITE_DECLINED"
++    type:
++      | "MENTION"
++      | "COMMENT"
++      | "TASK_ASSIGNED"
++      | "TASK_SUMMONED"
++      | "TASK_INVITE_ACCEPTED"
++      | "TASK_INVITE_DECLINED"
++      | "ENGINEERING_TASK_ASSIGNED"
+     workflowStepId:string|null
+     // Opcional: MENTION/COMMENT siempre traen un comentario real
+     // detrás, TASK_ASSIGNED/TASK_SUMMONED nacen de "Convocar" y no
+     // tienen ningún comentario asociado.
+     commentId:string|null
+     messageSnippet:string
++    engineeringTaskId?:string|null
+   } & (
+     | { taskId:string; projectId:null }
+     | { taskId:null; projectId:string }
+@@ -116,6 +124,38 @@ export class NotificationRepository{
+     })
+   }
+ 
++
++  async findAndDeleteEngineeringAssignmentNotifications(
++    engineeringTaskId:string,
++    userId:string,
++  ){
++    const rows=await this.prisma.notification.findMany({
++      where:{
++        engineeringTaskId,
++        userId,
++        type:"ENGINEERING_TASK_ASSIGNED",
++      },
++      select:{ id:true },
++    })
++    if(rows.length===0)return []
++    await this.prisma.notification.deleteMany({
++      where:{ id:{ in:rows.map(r=>r.id) } },
++    })
++    return rows
++  }
++
++  findManyByEngineeringTaskAndUser(
++    engineeringTaskId:string,
++    userId:string,
++  ){
++    return this.prisma.notification.findMany({
++      where:{ engineeringTaskId, userId },
++      include:notificationInclude,
++      orderBy:{ createdAt:"desc" },
++      take:1,
++    })
++  }
++
+   resolveUserIdsByUsernames(usernames:string[]){
+     return this.prisma.user.findMany({
+       where:{

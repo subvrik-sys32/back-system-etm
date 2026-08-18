@@ -83,13 +83,21 @@ export class NotificationRepository{
   createMany(data:({
     userId:string
     actorId:string
-    type:"MENTION"|"COMMENT"|"TASK_ASSIGNED"|"TASK_SUMMONED"|"TASK_INVITE_ACCEPTED"|"TASK_INVITE_DECLINED"
+    type:
+      | "MENTION"
+      | "COMMENT"
+      | "TASK_ASSIGNED"
+      | "TASK_SUMMONED"
+      | "TASK_INVITE_ACCEPTED"
+      | "TASK_INVITE_DECLINED"
+      | "ENGINEERING_TASK_ASSIGNED"
     workflowStepId:string|null
     // Opcional: MENTION/COMMENT siempre traen un comentario real
     // detrás, TASK_ASSIGNED/TASK_SUMMONED nacen de "Convocar" y no
     // tienen ningún comentario asociado.
     commentId:string|null
     messageSnippet:string
+    engineeringTaskId?:string|null
   } & (
     | { taskId:string; projectId:null }
     | { taskId:null; projectId:string }
@@ -110,6 +118,38 @@ export class NotificationRepository{
   findManyByWorkflowStepAndUser(workflowStepId:string,userId:string){
     return this.prisma.notification.findMany({
       where:{ workflowStepId, userId },
+      include:notificationInclude,
+      orderBy:{ createdAt:"desc" },
+      take:1,
+    })
+  }
+
+
+  async findAndDeleteEngineeringAssignmentNotifications(
+    engineeringTaskId:string,
+    userId:string,
+  ){
+    const rows=await this.prisma.notification.findMany({
+      where:{
+        engineeringTaskId,
+        userId,
+        type:"ENGINEERING_TASK_ASSIGNED",
+      },
+      select:{ id:true },
+    })
+    if(rows.length===0)return []
+    await this.prisma.notification.deleteMany({
+      where:{ id:{ in:rows.map(r=>r.id) } },
+    })
+    return rows
+  }
+
+  findManyByEngineeringTaskAndUser(
+    engineeringTaskId:string,
+    userId:string,
+  ){
+    return this.prisma.notification.findMany({
+      where:{ engineeringTaskId, userId },
       include:notificationInclude,
       orderBy:{ createdAt:"desc" },
       take:1,

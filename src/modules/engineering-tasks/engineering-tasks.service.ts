@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common"
 import { EngineeringProcessCode } from "@prisma/client"
 
 import { PrismaService } from "@/infra/database/prisma/prisma.service"
+import { NotificationsService } from "@/modules/notifications/notifications.service"
 
 import { CreateEngineeringTaskDto } from "./dto/create-engineering-task.dto"
 import { UpdateEngineeringTaskDto } from "./dto/update-engineering-task.dto"
@@ -20,7 +21,10 @@ const include = {
 
 @Injectable()
 export class EngineeringTasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   findAll(filters: {
     projectId?: string
@@ -58,7 +62,7 @@ export class EngineeringTasksService {
     })
     const taskNumber = (max._max.taskNumber ?? 0) + 1
 
-    return this.prisma.engineeringTask.create({
+    const row = await this.prisma.engineeringTask.create({
       data: {
         taskNumber,
         title: dto.title,
@@ -71,11 +75,26 @@ export class EngineeringTasksService {
       },
       include,
     })
+
+    if (dto.assigneeId) {
+      await this.notifications
+        .notifyEngineeringTaskAssigned({
+          assigneeId: dto.assigneeId,
+          actorId: userId,
+          engineeringTaskId: row.id,
+          projectId: row.projectId,
+          messageSnippet: `#${String(row.taskNumber).padStart(3, "0")} · ${row.title}`,
+        })
+        .catch(() => {})
+    }
+
+    return row
   }
 
   async update(id: string, dto: UpdateEngineeringTaskDto, userId: string) {
-    await this.findOne(id)
-    return this.prisma.engineeringTask.update({
+    const prev = await this.findOne(id)
+
+    const row = await this.prisma.engineeringTask.update({
       where: { id },
       data: {
         ...dto,
@@ -83,16 +102,48 @@ export class EngineeringTasksService {
       },
       include,
     })
+
+    // Solo si el DTO toca assigneeId
+    if (Object.prototype.hasOwnProperty.call(dto, "assigneeId")) {
+      const nextId = dto.assigneeId ?? null
+      const prevId = prev.assigneeId ?? null
+
+      if (prevId && prevId !== nextId) {
+        await this.notifications
+          .retractEngineeringTaskAssigned(id, prevId)
+          .catch(() => {})
+      }
+
+      if (nextId && nextId !== prevId) {
+        await this.notifications
+          .notifyEngineeringTaskAssigned({
+            assigneeId: nextId,
+            actorId: userId,
+            engineeringTaskId: row.id,
+            projectId: row.projectId,
+            messageSnippet: `#${String(row.taskNumber).padStart(3, "0")} · ${row.title}`,
+          })
+          .catch(() => {})
+      }
+    }
+
+    return row
   }
 
   async remove(id: string, userId: string) {
-    await this.findOne(id)
+    const prev = await this.findOne(id)
+    if (prev.assigneeId) {
+      await this.notifications
+        .retractEngineeringTaskAssigned(id, prev.assigneeId)
+        .catch(() => {})
+    }
     return this.prisma.engineeringTask.update({
       where: { id },
       data: {
         deletedAt: new Date(),
         updatedById: userId,
       },
+      include,
     })
   }
 }
