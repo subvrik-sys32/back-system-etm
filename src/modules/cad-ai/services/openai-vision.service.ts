@@ -35,7 +35,7 @@ export class OpenaiVisionService {
       const apiKey = process.env.OPENAI_API_KEY?.trim()
       if (!apiKey) {
         throw new ServiceUnavailableException(
-          "IA no disponible.",
+          "IA no disponible, actualizar key.",
         )
       }
       this.client = new OpenAI({ apiKey })
