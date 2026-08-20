@@ -35,7 +35,7 @@ export class OpenaiVisionService {
       const apiKey = process.env.OPENAI_API_KEY?.trim()
       if (!apiKey) {
         throw new ServiceUnavailableException(
-          "OPENAI_API_KEY no está configurada en el servidor. Agrégala al .env del backend y reinicia para usar la IA de CAD.",
+          "IA no disponible.",
         )
       }
       this.client = new OpenAI({ apiKey })
