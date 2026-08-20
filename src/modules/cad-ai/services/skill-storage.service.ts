@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common"
 import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
 import type { Skill, SkillParameter, PlanGeometry } from "../types/entity.types"
 
-const SKILLS_BUCKET = "cad-ai-skills"
+const SKILLS_BUCKET = "cad-ai-skills" 
 const SKILLS_FILE = "skills.json"
 
 function isNotFoundError(error: unknown): boolean {
