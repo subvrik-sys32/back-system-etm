@@ -120,6 +120,10 @@ import {
   ActivityLogModule,
 } from "@/modules/activity-log/activity-log.module"
 
+import {
+  CadAiModule,
+} from "@/modules/cad-ai/cad-ai.module"
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -152,6 +156,7 @@ import {
     SidebarModule,
     StorageModule,
     ActivityLogModule,
+    CadAiModule,
   ],
   controllers: [
     AppController,

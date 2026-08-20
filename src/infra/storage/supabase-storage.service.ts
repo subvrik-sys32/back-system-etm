@@ -109,6 +109,31 @@ export class SupabaseStorageService {
 
   }
 
+  private ensuredBuckets = new Set<string>()
+
+  async ensureBucket(bucket: string): Promise<void> {
+    if (this.ensuredBuckets.has(bucket)) return
+
+    const { data, error } = await this.client.storage.getBucket(bucket)
+
+    if (error || !data) {
+      // Bucket no existe — lo creamos como público/privado según necesidad.
+      // cad-ai-skills guarda JSON server-side, no necesita ser público.
+      const { error: createError } = await this.client.storage.createBucket(bucket, {
+        public: false,
+        fileSizeLimit: "10MB",
+      })
+
+      if (createError) {
+        this.logger.warn(`No se pudo crear el bucket ${bucket}: ${createError.message}`)
+      } else {
+        this.logger.log(`Bucket ${bucket} creado automáticamente`)
+      }
+    }
+
+    this.ensuredBuckets.add(bucket)
+  }
+
   // Genéricos, para cualquier archivo que necesite guardarse en un
   // bucket privado y leerse server-side (ej. los DXF de Engineering
   // — antes en disco local, que Render borra en cada redeploy).
@@ -118,6 +143,8 @@ export class SupabaseStorageService {
     buffer: Buffer,
     contentType: string,
   ) {
+
+    await this.ensureBucket(bucket)
 
     const { error } = await this.client.storage
       .from(bucket)
@@ -133,6 +160,8 @@ export class SupabaseStorageService {
   }
 
   async downloadFile(bucket: string, path: string): Promise<Buffer> {
+
+    await this.ensureBucket(bucket)
 
     const { data, error } = await this.client.storage
       .from(bucket)

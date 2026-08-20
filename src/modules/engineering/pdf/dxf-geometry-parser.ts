@@ -42,6 +42,8 @@ export interface DrawEntity {
   r?: number;
   start?: number;
   end?: number;
+  layer?: string;
+  colorCode?: number;
 }
 
 export interface DxfPiece {
@@ -93,10 +95,10 @@ export function parseDxfGeometry(rawEntities: any[]): DxfGeometryResult {
   const { segments, circles, allForLayout } = collectEntities(rawEntities);
 
   const contours = groupIntoContours(segments);
-  const { outerContours, holeCountByContour, holeAreaByContour } = classifyContours(contours);
+  const { outerContours, holeCountByContour, holeAreaByContour, holeContoursByOuter } = classifyContours(contours);
   assignCirclesToContours(circles, outerContours, holeCountByContour, holeAreaByContour);
 
-  const rawPieces = outerContours.map((c) => buildPiece(c, holeCountByContour, holeAreaByContour));
+  const rawPieces = outerContours.map((c) => buildPiece(c, holeCountByContour, holeAreaByContour, holeContoursByOuter));
   const pieces = mergeDuplicates(rawPieces.filter((p) => p.width > 0 && p.height > 0));
 
   const layout = buildLayout(allForLayout);
@@ -136,7 +138,7 @@ function collectEntities(rawEntities: any[]): {
         const r: number = e.radius || 0;
         const cx: number = e.center?.x ?? 0;
         const cy: number = e.center?.y ?? 0;
-        const entity: DrawEntity = { kind: 'circle', cx, cy, r };
+        const entity: DrawEntity = { kind: 'circle', cx, cy, r, layer: e.layer, colorCode: e.color };
         circles.push({ entity, center: { x: cx, y: cy } });
         allForLayout.push(entity);
         break;
@@ -148,7 +150,7 @@ function collectEntities(rawEntities: any[]): {
         const cy: number = e.center?.y ?? 0;
         const start: number = e.startAngle ?? 0;
         const end: number = e.endAngle ?? Math.PI * 2;
-        const entity: DrawEntity = { kind: 'arc', cx, cy, r, start, end };
+        const entity: DrawEntity = { kind: 'arc', cx, cy, r, start, end, layer: e.layer, colorCode: e.color };
         allForLayout.push(entity);
 
         const sampled = sampleArc(cx, cy, r, start, end);
@@ -171,7 +173,7 @@ function collectEntities(rawEntities: any[]): {
         const visuallyClosed = samePoint(points[0], points[points.length - 1]);
         const closed = flaggedClosed || visuallyClosed;
 
-        const entity: DrawEntity = { kind: 'polyline', points, closed };
+        const entity: DrawEntity = { kind: 'polyline', points, closed, layer: e.layer, colorCode: e.color };
         allForLayout.push(entity);
 
         segments.push({
@@ -189,7 +191,7 @@ function collectEntities(rawEntities: any[]): {
         const b = e.vertices?.[1] ?? e.end;
         if (!a || !b || a.x === undefined || b.x === undefined) break;
 
-        const entity: DrawEntity = { kind: 'line', x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+        const entity: DrawEntity = { kind: 'line', x1: a.x, y1: a.y, x2: b.x, y2: b.y, layer: e.layer, colorCode: e.color };
         allForLayout.push(entity);
 
         segments.push({
@@ -332,9 +334,11 @@ function classifyContours(contours: Contour[]): {
   outerContours: Contour[];
   holeCountByContour: Map<Contour, number>;
   holeAreaByContour: Map<Contour, number>;
+  holeContoursByOuter: Map<Contour, Contour[]>;
 } {
   const holeCountByContour = new Map<Contour, number>();
   const holeAreaByContour = new Map<Contour, number>();
+  const holeContoursByOuter = new Map<Contour, Contour[]>();
 
   const byAreaDesc = [...contours].sort((a, b) => bboxArea(b.bounds) - bboxArea(a.bounds));
 
@@ -369,17 +373,20 @@ function classifyContours(contours: Contour[]): {
     }
 
     outer.push(candidate);
+    const holeContours: Contour[] = [];
     for (const child of children) {
       demoted.add(child);
+      holeContours.push(child);
       holeCountByContour.set(candidate, (holeCountByContour.get(candidate) || 0) + 1);
       const area = contourArea(child);
       if (area > 0) {
         holeAreaByContour.set(candidate, (holeAreaByContour.get(candidate) || 0) + area);
       }
     }
+    holeContoursByOuter.set(candidate, holeContours);
   }
 
-  return { outerContours: outer, holeCountByContour, holeAreaByContour };
+  return { outerContours: outer, holeCountByContour, holeAreaByContour, holeContoursByOuter };
 }
 
 function bboxArea(b: Bounds): number {
@@ -460,6 +467,7 @@ function buildPiece(
   contour: Contour,
   holeCountByContour: Map<Contour, number>,
   holeAreaByContour: Map<Contour, number>,
+  holeContoursByOuter: Map<Contour, Contour[]>,
 ): DxfPiece {
   const { minX, minY, maxX, maxY } = contour.bounds;
   const width = maxX - minX;
@@ -468,6 +476,13 @@ function buildPiece(
   const ownEntities = contour.members.map((m) => normalize(m.entity, minX, minY));
   const extraCircles: DrawEntity[] = ((contour as any)._extraCircles || []).map((e: DrawEntity) =>
     normalize(e, minX, minY),
+  );
+
+  // Include hole contour entities (internal cuts/folds) so they are
+  // preserved in the nesting piece — not just counted.
+  const holeContours = holeContoursByOuter.get(contour) || [];
+  const holeEntities: DrawEntity[] = holeContours.flatMap((hc) =>
+    hc.members.map((m) => normalize(m.entity, minX, minY)),
   );
 
   const outerArea = contourArea(contour);
@@ -481,24 +496,28 @@ function buildPiece(
     holes: holeCountByContour.get(contour) || 0,
     count: 1,
     area: round2(netArea),
-    entities: [...ownEntities, ...extraCircles],
+    entities: [...ownEntities, ...holeEntities, ...extraCircles],
   };
 }
 
 function normalize(e: DrawEntity, minX: number, minY: number): DrawEntity {
+  const layer = e.layer;
+  const colorCode = e.colorCode;
   switch (e.kind) {
     case 'circle':
-      return { kind: 'circle', cx: e.cx! - minX, cy: e.cy! - minY, r: e.r };
+      return { kind: 'circle', cx: e.cx! - minX, cy: e.cy! - minY, r: e.r, layer, colorCode };
     case 'arc':
-      return { kind: 'arc', cx: e.cx! - minX, cy: e.cy! - minY, r: e.r, start: e.start, end: e.end };
+      return { kind: 'arc', cx: e.cx! - minX, cy: e.cy! - minY, r: e.r, start: e.start, end: e.end, layer, colorCode };
     case 'polyline':
       return {
         kind: 'polyline',
         points: e.points!.map((p) => ({ x: p.x - minX, y: p.y - minY })),
         closed: e.closed,
+        layer,
+        colorCode,
       };
     case 'line':
-      return { kind: 'line', x1: e.x1! - minX, y1: e.y1! - minY, x2: e.x2! - minX, y2: e.y2! - minY };
+      return { kind: 'line', x1: e.x1! - minX, y1: e.y1! - minY, x2: e.x2! - minX, y2: e.y2! - minY, layer, colorCode };
     default:
       return e;
   }

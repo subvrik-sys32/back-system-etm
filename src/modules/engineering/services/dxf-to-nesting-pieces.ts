@@ -1,5 +1,6 @@
 import type { NestingPiece, Point2D } from '../nesting/engine/types'
 import type { DrawEntity, DxfPiece } from '../pdf/dxf-geometry-parser'
+import { classifyDxfColor } from '../cad/rich/classify-dxf-color'
 
 function entityPoints(e: DrawEntity): Point2D[] {
   if (e.kind === 'polyline' && e.points?.length) {
@@ -81,9 +82,11 @@ export function dxfPiecesToNestingPieces(pieces: DxfPiece[]): NestingPiece[] {
       const pts = entityPoints(e)
       if (!pts.length) continue
       allPts.push(...pts)
+      const color = classifyDxfColor(e.layer ?? '', e.colorCode ?? 0)
       subEntities.push({
         outline: { points: pts },
-        color: '#22c55e',
+        color,
+        layer: e.layer,
       })
     }
     return {
