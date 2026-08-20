@@ -5,6 +5,21 @@ import type { Skill, SkillParameter, PlanGeometry } from "../types/entity.types"
 const SKILLS_BUCKET = "cad-ai-skills"
 const SKILLS_FILE = "skills.json"
 
+function isNotFoundError(error: unknown): boolean {
+  const msg =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : JSON.stringify(error)
+  return (
+    /object not found/i.test(msg) ||
+    /not found/i.test(msg) ||
+    /no such file/i.test(msg) ||
+    /404/.test(msg)
+  )
+}
+
 @Injectable()
 export class SkillStorageService {
 
@@ -23,6 +38,23 @@ export class SkillStorageService {
       this.cachedSkills = JSON.parse(text) as Skill[]
       return this.cachedSkills
     } catch (error) {
+      // Primera ejecución / bucket vacío: no es error fatal.
+      if (isNotFoundError(error)) {
+        this.logger.warn(
+          `${SKILLS_BUCKET}/${SKILLS_FILE} no existe — se inicializa vacío`,
+        )
+        this.cachedSkills = []
+        try {
+          await this.persist([])
+        } catch (persistError) {
+          this.logger.warn(
+            "No se pudo crear skills.json inicial (el listado seguirá vacío)",
+            persistError,
+          )
+        }
+        return this.cachedSkills
+      }
+
       this.logger.error("Failed to load skills file", error)
       this.cachedSkills = []
       return []
@@ -73,7 +105,12 @@ export class SkillStorageService {
   private async persist(skills: Skill[]): Promise<void> {
     const json = JSON.stringify(skills, null, 2)
     const buffer = Buffer.from(json, "utf-8")
-    await this.storage.uploadFile(SKILLS_BUCKET, SKILLS_FILE, buffer, "application/json")
+    await this.storage.uploadFile(
+      SKILLS_BUCKET,
+      SKILLS_FILE,
+      buffer,
+      "application/json",
+    )
   }
 
   applyParameters(

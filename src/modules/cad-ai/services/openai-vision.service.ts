@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common"
+import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common"
 import OpenAI from "openai"
 import type { PlanGeometry, Entity, ViewGeometry } from "../types/entity.types"
 import { ImagePreprocessService, type ProcessedImage } from "./image-preprocess.service"
@@ -32,9 +32,11 @@ export class OpenaiVisionService {
 
   private get openai(): OpenAI {
     if (!this.client) {
-      const apiKey = process.env.OPENAI_API_KEY
+      const apiKey = process.env.OPENAI_API_KEY?.trim()
       if (!apiKey) {
-        throw new Error("OPENAI_API_KEY no está configurada — no se puede usar la IA de CAD.")
+        throw new ServiceUnavailableException(
+          "OPENAI_API_KEY no está configurada en el servidor. Agrégala al .env del backend y reinicia para usar la IA de CAD.",
+        )
       }
       this.client = new OpenAI({ apiKey })
     }
