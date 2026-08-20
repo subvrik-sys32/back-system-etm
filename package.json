@@ -111,25 +111,5 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-  },
-  "pnpm": {
-    "overrides": {
-      "js-yaml": ">=4.3.1",
-      "nanoid": ">=3.3.18",
-      "postcss": ">=8.5.23",
-      "socket.io-parser": ">=4.2.7",
-      "@angular/core": "20.3.28",
-      "@angular/common": "20.3.28",
-      "deepmerge-ts": "8.0.0",
-      "glob": "13.0.6"
-    },
-    "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
-      "bcrypt",
-      "prisma",
-      "sharp",
-      "unrs-resolver"
-    ]
   }
 }

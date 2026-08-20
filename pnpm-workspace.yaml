@@ -1,3 +1,6 @@
+packages:
+  - "."
+
 overrides:
   js-yaml: ">=4.3.1"
   nanoid: ">=3.3.18"
@@ -18,8 +21,10 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 allowBuilds:
-  '@prisma/client': set this to true or false
-  '@prisma/engines': set this to true or false
-  bcrypt: set this to true or false
-  prisma: set this to true or false
-  unrs-resolver: set this to true or false
+  "@prisma/client": true
+  "@prisma/engines": true
+  "@opencvjs/node": true
+  bcrypt: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
