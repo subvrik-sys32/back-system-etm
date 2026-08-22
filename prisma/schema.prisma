@@ -141,6 +141,7 @@ model User {
   workflowStepsInvited   WorkflowStep[] @relation("WorkflowStepInvitedOperator")
   workflowStepsInvitedBy WorkflowStep[] @relation("WorkflowStepInvitedBy")
   comments               Comment[]
+  detailAssets           DetailAsset[] @relation("DetailAssetCreatedBy")
   notificationsReceived  Notification[] @relation("NotificationRecipient")
   notificationsSent      Notification[] @relation("NotificationActor")
   activityLogs           ActivityLog[]
@@ -374,6 +375,7 @@ model Project {
   status        Status         @relation(fields: [statusId], references: [id])
   updatedBy     User           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   tasks             Task[]
+  detailAssets      DetailAsset[]
   engineeringTasks  EngineeringTask[]
   comments          Comment[]
   activityLogs  ActivityLog[]
@@ -413,6 +415,7 @@ model Task {
   thickness     Thickness      @relation(fields: [thicknessId], references: [id])
   updatedBy     User           @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
   materialLines TaskMaterialLine[]
+  detailAssets  DetailAsset[]
   workflowSteps WorkflowStep[]
   comments      Comment[]
   activityLogs  ActivityLog[]
@@ -429,6 +432,7 @@ model TaskMaterialLine {
   task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   material    Material  @relation(fields: [materialId], references: [id])
   thickness   Thickness @relation(fields: [thicknessId], references: [id])
+  detailAssets DetailAsset[]
 
   @@index([taskId])
 }
@@ -661,4 +665,41 @@ model EngineeringTask {
   @@index([processCode])
   @@index([assigneeId])
   @@index([status])
+}
+
+enum DetailAssetKind {
+  PHOTO
+  NOTE
+  DXF
+}
+
+/// Fotos/nota en Project|Task; DXF en TaskMaterialLine.
+/// Binarios en Supabase (detail-assets); aquí solo metadatos.
+model DetailAsset {
+  id             String          @id @default(uuid())
+  kind           DetailAssetKind
+  storageKey     String?
+  publicUrl      String?
+  mimeType       String          @default("application/octet-stream")
+  sizeBytes      Int             @default(0)
+  originalName   String          @default("")
+  meta           Json?
+  sortOrder      Int             @default(0)
+  createdById    String
+  createdAt      DateTime        @default(now())
+  deletedAt      DateTime?
+
+  projectId      String?
+  taskId         String?
+  materialLineId String?
+
+  createdBy    User               @relation("DetailAssetCreatedBy", fields: [createdById], references: [id])
+  project      Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task         Task?              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  materialLine TaskMaterialLine?  @relation(fields: [materialLineId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([materialLineId])
+  @@index([kind, createdAt])
 }
