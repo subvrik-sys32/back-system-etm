@@ -1,0 +1,25 @@
+diff --git a/src/modules/detail-assets/detail-assets.service.ts b/src/modules/detail-assets/detail-assets.service.ts
+index 40b758d..26bd840 100644
+--- a/src/modules/detail-assets/detail-assets.service.ts
++++ b/src/modules/detail-assets/detail-assets.service.ts
+@@ -19,12 +19,9 @@ const MAX_PHOTOS = 2
+ const MAX_DXF_BYTES = 15 * 1024 * 1024
+ const MAX_PHOTO_BYTES = 8 * 1024 * 1024
+ 
+-@Injectable()
+-
+ /** Nombre de archivo seguro para storage, preservando el nombre original. */
+ function sanitizeOriginalName(name: string, fallback = "piece.dxf"): string {
+   const base = (name || fallback).trim() || fallback
+-  // quita path traversal y chars problemáticos en S3/Supabase
+   const cleaned = base
+     .replace(/\\/g, "/")
+     .split("/")
+@@ -35,6 +32,7 @@ function sanitizeOriginalName(name: string, fallback = "piece.dxf"): string {
+   return cleaned.toLowerCase().endsWith(".dxf") ? cleaned : `${cleaned}.dxf`
+ }
+ 
++@Injectable()
+ export class DetailAssetsService {
+   private readonly logger = new Logger("DetailAssets")
+ 
