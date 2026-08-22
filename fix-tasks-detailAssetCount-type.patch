@@ -1,0 +1,33 @@
+diff --git a/src/modules/tasks/tasks.service.ts b/src/modules/tasks/tasks.service.ts
+index b28a488..65d073f 100644
+--- a/src/modules/tasks/tasks.service.ts
++++ b/src/modules/tasks/tasks.service.ts
+@@ -147,11 +147,16 @@ export class TasksService{
+ 
+ 
+   private withCommentCount<T extends {
+-    _count?: { comments: number }
++    _count?: { comments: number; detailAssets?: number }
+     workflowSteps?: Array<{ _count?: { comments: number } } & Record<string, unknown>>
+-  }>(row: NonNullable<T>): Omit<NonNullable<T>, "_count"> & { commentCount: number } {
++  }>(
++    row: NonNullable<T>,
++  ): Omit<NonNullable<T>, "_count"> & {
++    commentCount: number
++    detailAssetCount: number
++  } {
+     const { _count, workflowSteps, ...rest } = row as NonNullable<T> & {
+-      _count?: { comments: number }
++      _count?: { comments: number; detailAssets?: number }
+       workflowSteps?: Array<{ _count?: { comments: number } } & Record<string, unknown>>
+     }
+     const steps = workflowSteps?.map((step) => {
+@@ -166,7 +171,7 @@ export class TasksService{
+       ...(steps ? { workflowSteps: steps } : {}),
+       commentCount: _count?.comments ?? 0,
+       detailAssetCount: _count?.detailAssets ?? 0,
+-    } as Omit<T, "_count"> & { commentCount: number }
++    } as Omit<T, "_count"> & { commentCount: number; detailAssetCount: number }
+ 
+     // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null
+     return withCalendarDates(base as Record<string, unknown>) as typeof base
