@@ -146,21 +146,20 @@ export class TasksService{
 
 
 
-  private withCommentCount<T extends Record<string, unknown>>(
-    row: NonNullable<T>,
-  ): Omit<NonNullable<T>, "_count"> & {
-    commentCount: number
-    detailAssetCount: number
-  } {
-    const raw = row as NonNullable<T> & {
-      _count?: { comments?: number; detailAssets?: number }
-      workflowSteps?: Array<
-        { _count?: { comments?: number } } & Record<string, unknown>
-      >
-    }
-    const { _count, workflowSteps, ...rest } = raw
-    const countBag = _count ?? {}
-    const steps = workflowSteps?.map((step) => {
+  /**
+   * Aplana `_count` de Prisma → contadores estables en la API.
+   * - commentCount: mensajes de la tarea (no de pasos)
+   * - detailAssetCount: fotos / notas / DXF ligados a la tarea
+   * También aplana commentCount en cada workflowStep.
+   */
+  private withCommentCount<T extends {
+    _count?: { comments?: number; detailAssets?: number } | null
+    workflowSteps?: ReadonlyArray<
+      { _count?: { comments?: number } | null } & Record<string, unknown>
+    > | null
+  }>(row: T) {
+    const { _count, workflowSteps, ...rest } = row
+    const steps = workflowSteps?.map(step => {
       const { _count: stepCount, ...stepRest } = step
       return {
         ...stepRest,
@@ -168,12 +167,11 @@ export class TasksService{
       }
     })
     const base = {
-      ...(rest as Omit<T, "_count" | "workflowSteps">),
+      ...rest,
       ...(steps ? { workflowSteps: steps } : {}),
-      commentCount: countBag.comments ?? 0,
-      detailAssetCount: countBag.detailAssets ?? 0,
+      commentCount: _count?.comments ?? 0,
+      detailAssetCount: _count?.detailAssets ?? 0,
     }
-
     // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null
     return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
