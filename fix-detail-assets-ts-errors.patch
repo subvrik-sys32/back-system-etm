@@ -1,0 +1,15 @@
+diff --git a/src/modules/detail-assets/detail-assets.service.ts b/src/modules/detail-assets/detail-assets.service.ts
+index 0000000..1111111 100644
+--- a/src/modules/detail-assets/detail-assets.service.ts
++++ b/src/modules/detail-assets/detail-assets.service.ts
+@@ -158,8 +158,8 @@
+     if (!this.canManage(user, isProject ? "project" : "task")) throw new ForbiddenException("Sin permiso")
+     const meta = { text: (text ?? "").slice(0, 4000) }
+     const where = scope.projectId
+-      ? { projectId: scope.projectId, kind: DetailAssetKind.NOTE as const, deletedAt: null, materialLineId: null }
+-      : { taskId: scope.taskId!, kind: DetailAssetKind.NOTE as const, deletedAt: null, materialLineId: null }
++      ? { projectId: scope.projectId, kind: DetailAssetKind.NOTE, deletedAt: null, materialLineId: null }
++      : { taskId: scope.taskId!, kind: DetailAssetKind.NOTE, deletedAt: null, materialLineId: null }
+ 
+     const existing = await this.prisma.detailAsset.findFirst({ where })
+     if (existing) {

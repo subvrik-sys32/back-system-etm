@@ -55,6 +55,10 @@ export class TasksService{
       include:{
         material:true,
         thickness:true,
+        detailAssets:{
+          where:{ deletedAt:null, kind:"DXF" as const },
+          take:1,
+        },
       },
       orderBy:{ sortOrder:"asc" as const },
     },
