@@ -20,6 +20,21 @@ const MAX_DXF_BYTES = 15 * 1024 * 1024
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 @Injectable()
+
+/** Nombre de archivo seguro para storage, preservando el nombre original. */
+function sanitizeOriginalName(name: string, fallback = "piece.dxf"): string {
+  const base = (name || fallback).trim() || fallback
+  // quita path traversal y chars problemáticos en S3/Supabase
+  const cleaned = base
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()!
+    .replace(/[^\w.\- ()\[\]áéíóúÁÉÍÓÚñÑüÜ]+/gi, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 180)
+  return cleaned.toLowerCase().endsWith(".dxf") ? cleaned : `${cleaned}.dxf`
+}
+
 export class DetailAssetsService {
   private readonly logger = new Logger("DetailAssets")
 
@@ -206,7 +221,17 @@ export class DetailAssetsService {
       await this.prisma.detailAsset.update({ where: { id: prev.id }, data: { deletedAt: new Date() } })
     }
 
-    const storageKey = `dxf/${line.taskId}/${materialLineId}/${randomUUID()}.dxf`
+    const originalName = sanitizeOriginalName(file.originalname || "piece.dxf")
+    // Misma carpeta; nombre = el que cargó el usuario (colisión → sufijo corto)
+    let storageKey = `dxf/${line.taskId}/${materialLineId}/${originalName}`
+    const collision = await this.prisma.detailAsset.findFirst({
+      where: { storageKey, deletedAt: null },
+      select: { id: true },
+    })
+    if (collision) {
+      const stem = originalName.replace(/\.dxf$/i, "")
+      storageKey = `dxf/${line.taskId}/${materialLineId}/${stem}-${randomUUID().slice(0, 8)}.dxf`
+    }
     await this.storage.uploadFile(BUCKET, storageKey, file.buffer, "application/dxf")
     const publicUrl = this.storage.getPublicUrl(BUCKET, storageKey)
 
@@ -217,7 +242,7 @@ export class DetailAssetsService {
         publicUrl,
         mimeType: "application/dxf",
         sizeBytes: file.size,
-        originalName: file.originalname || "piece.dxf",
+        originalName,
         materialLineId,
         taskId: line.taskId,
         createdById: user.id,
