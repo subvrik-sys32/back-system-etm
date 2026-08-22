@@ -93,6 +93,9 @@ export class TasksService{
             workflowStepId:null,
           },
         },
+        detailAssets:{
+          where:{ deletedAt:null },
+        },
       },
     },
   } satisfies Prisma.TaskInclude
@@ -162,6 +165,7 @@ export class TasksService{
       ...(rest as Omit<T, "_count" | "workflowSteps">),
       ...(steps ? { workflowSteps: steps } : {}),
       commentCount: _count?.comments ?? 0,
+      detailAssetCount: _count?.detailAssets ?? 0,
     } as Omit<T, "_count"> & { commentCount: number }
 
     // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null

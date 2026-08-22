@@ -81,6 +81,9 @@ export class ProjectsService{
         tasks: {
           where: this.activeTaskWhere,
         },
+        detailAssets: {
+          where: { deletedAt: null },
+        },
       },
     },
   } satisfies Prisma.ProjectInclude
@@ -92,18 +95,20 @@ export class ProjectsService{
    * cargar las colecciones completas.
    */
   private withCommentCount<T extends {
-    _count?: { comments: number; tasks?: number }
+    _count?: { comments: number; tasks?: number; detailAssets?: number }
   }>(
     row: NonNullable<T>,
   ): Omit<NonNullable<T>, "_count"> & {
     commentCount: number
     taskCount: number
+    detailAssetCount: number
   } {
     const { _count, ...rest } = row
     const base = {
       ...(rest as Omit<NonNullable<T>, "_count">),
       commentCount: _count?.comments ?? 0,
       taskCount: _count?.tasks ?? 0,
+      detailAssetCount: _count?.detailAssets ?? 0,
     }
     // deliveryDate siempre "YYYY-MM-DD" | null en la API
     return withCalendarDates(base as Record<string, unknown>) as typeof base
