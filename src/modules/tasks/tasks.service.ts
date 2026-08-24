@@ -4,104 +4,105 @@ import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { CreateTaskDto } from "./dto/create-task.dto"
 import { UpdateTaskDto } from "./dto/update-task.dto"
 import { ReorderTaskItemDto } from "./dto/reorder-task.dto"
-import { buildWorkflow, hasWorkflowStarted, assertRouteOnlyAdds, planWorkflowMerge } from "@/modules/workflow/engine/rebuild-workflow"
+import {
+  buildWorkflow,
+  hasWorkflowStarted,
+  assertRouteOnlyAdds,
+  planWorkflowMerge,
+} from "@/modules/workflow/engine/rebuild-workflow"
 import { RealtimeService } from "@/modules/realtime/realtime.service"
 import { parseDateOnly, withCalendarDates } from "@/shared/utils/calendar-date"
 
 @Injectable()
-export class TasksService{
-  constructor(  
-    private readonly prisma:PrismaService,
-    private readonly realtime:RealtimeService,
-    ){}
+export class TasksService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
-  private readonly includeRelations={
-    project:{
-      include:{
-        client:true,
-        stage:true,
-        status:true,
-        pm:{
-          select:{
-            id:true,
-            name:true,
-            color:true,
-            icon:true,
+  private readonly includeRelations = {
+    project: {
+      include: {
+        client: true,
+        stage: true,
+        status: true,
+        pm: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            icon: true,
           },
         },
       },
     },
-    priority:true,
-    material:true,
-    thickness:true,
-    color:true,
-    createdBy:{
-      select:{
-        id:true,
-        name:true,
-        color:true,
-        icon:true,
+    priority: true,
+    material: true,
+    thickness: true,
+    color: true,
+    createdBy: {
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
       },
     },
-    updatedBy:{
-      select:{
-        id:true,
-        name:true,
-        color:true,
-        icon:true,
+    updatedBy: {
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
       },
     },
-    materialLines:{
-      include:{
-        material:true,
-        thickness:true,
-        detailAssets:{
-          where:{ deletedAt:null, kind:"DXF" as const },
-          take:1,
+    materialLines: {
+      include: {
+        material: true,
+        thickness: true,
+        detailAssets: {
+          where: { deletedAt: null, kind: "DXF" as const },
+          take: 1,
         },
       },
-      orderBy:{ sortOrder:"asc" as const },
+      orderBy: { sortOrder: "asc" as const },
     },
-    workflowSteps:{
-      include:{
-        operator:{
-          select:{
-            id:true,
-            name:true,
-            color:true,
-            icon:true,
+    workflowSteps: {
+      include: {
+        operator: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            icon: true,
           },
         },
-        _count:{
-          select:{
-            comments:{
-              where:{ deletedAt:null },
+        _count: {
+          select: {
+            comments: {
+              where: { deletedAt: null },
             },
           },
         },
       },
-      orderBy:{ order:"asc" as const },
+      orderBy: { order: "asc" as const },
     },
-    // commentCount de la TAREA: solo mensajes con scope task
-    // (workflowStepId null). Los de proceso llevan taskId+stepId
-    // y se cuentan en workflowStep.commentCount.
-    _count:{
-      select:{
-        comments:{
-          where:{
-            deletedAt:null,
-            workflowStepId:null,
+    _count: {
+      select: {
+        comments: {
+          where: {
+            deletedAt: null,
+            workflowStepId: null,
           },
         },
-        detailAssets:{
-          where:{ deletedAt:null },
+        // fotos/notas + DXF (tienen taskId al subir)
+        detailAssets: {
+          where: { deletedAt: null },
         },
       },
     },
   } satisfies Prisma.TaskInclude
 
-
-  /** Normaliza líneas de material y denormaliza primary + total pieces. */
   private resolveMaterialLines(dto: {
     materials?: Array<{ materialId: string; thicknessId: string; pieces: number }>
     materialId?: string
@@ -144,13 +145,10 @@ export class TasksService{
     }
   }
 
-
-
   /**
-   * Aplana `_count` de Prisma → contadores estables en la API.
-   * - commentCount: mensajes de la tarea (no de pasos)
-   * - detailAssetCount: fotos / notas / DXF ligados a la tarea
-   * También aplana commentCount en cada workflowStep.
+   * Aplana `_count` → contadores estables.
+   * detailAssetCount: SSOT vía Prisma (_count.detailAssets con deletedAt null).
+   * Los DXF se crean con taskId → ya entran en ese count (no sumar otra vez).
    */
   private withCommentCount<T extends {
     _count?: { comments?: number; detailAssets?: number } | null
@@ -166,8 +164,7 @@ export class TasksService{
         commentCount: stepCount?.comments ?? 0,
       }
     })
-    // SSOT badge ojo: Prisma _count.detailAssets (deletedAt null)
-    // incluye fotos/notas y DXF (tienen taskId al subir).
+
     const base = {
       ...rest,
       ...(steps ? { workflowSteps: steps } : {}),
@@ -177,42 +174,37 @@ export class TasksService{
     return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
 
-  async findAll(){
+  async findAll() {
     const rows = await this.prisma.task.findMany({
-      where:{
-        deletedAt:null,
-        project:{ deletedAt:null },
+      where: {
+        deletedAt: null,
+        project: { deletedAt: null },
       },
-      include:this.includeRelations,
-      orderBy:{ position:"asc" },
+      include: this.includeRelations,
+      orderBy: { position: "asc" },
     })
-    return rows.map((row) => this.withCommentCount(row))
+    return rows.map(row => this.withCommentCount(row))
   }
 
-  async findOne(id:string){
-    const task=await this.prisma.task.findFirst({
-      where:{
+  async findOne(id: string) {
+    const task = await this.prisma.task.findFirst({
+      where: {
         id,
-        deletedAt:null,
-        project:{ deletedAt:null },
+        deletedAt: null,
+        project: { deletedAt: null },
       },
-      relationLoadStrategy:"join",
-      include:this.includeRelations,
+      relationLoadStrategy: "join",
+      include: this.includeRelations,
     })
 
-    if(!task){
+    if (!task) {
       throw new NotFoundException("Task not found")
     }
 
-    const found = task
-    return this.withCommentCount(found)
+    return this.withCommentCount(task)
   }
 
-  async create(
-    dto: CreateTaskDto,
-    userId: string,
-  ) {
-
+  async create(dto: CreateTaskDto, userId: string) {
     let lotNumber = dto.lotNumber
 
     if (lotNumber == null) {
@@ -225,9 +217,7 @@ export class TasksService{
         lotNumber,
         deletedAt: null,
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     })
 
     if (duplicatedLot) {
@@ -238,17 +228,11 @@ export class TasksService{
 
     const [lastTask, totalTasks] = await Promise.all([
       this.prisma.task.findFirst({
-        orderBy: {
-          taskNumber: "desc",
-        },
-        select: {
-          taskNumber: true,
-        },
+        orderBy: { taskNumber: "desc" },
+        select: { taskNumber: true },
       }),
       this.prisma.task.count({
-        where: {
-          deletedAt: null,
-        },
+        where: { deletedAt: null },
       }),
     ])
 
@@ -294,44 +278,45 @@ export class TasksService{
     })
 
     return mapped
-
   }
 
-  async update(id:string,dto:UpdateTaskDto,userId:string){
-    const exists=await this.prisma.task.findUnique({
-      where:{ id },
-      select:{
-        id:true,
-        route:true,
-        workflowSteps:{
-          select:{
-            id:true,
-            processCode:true,
-            status:true,
-            operatorId:true,
-            startedAt:true,
-            completedAt:true,
-            reviewedAt:true,
-            piecesOutput:true,
-            plRtReal:true,
-            paintKgReal:true,
-            order:true,
+  async update(id: string, dto: UpdateTaskDto, userId: string) {
+    const exists = await this.prisma.task.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        route: true,
+        workflowSteps: {
+          select: {
+            id: true,
+            processCode: true,
+            status: true,
+            operatorId: true,
+            startedAt: true,
+            completedAt: true,
+            reviewedAt: true,
+            piecesOutput: true,
+            plRtReal: true,
+            paintKgReal: true,
+            order: true,
           },
         },
       },
     })
 
-    if(!exists){
+    if (!exists) {
       throw new NotFoundException("Task not found")
     }
 
-    const routeChanged=dto.route!==undefined&&JSON.stringify(dto.route)!==JSON.stringify(exists.route)
-    const started=hasWorkflowStarted(exists.workflowSteps)
+    const routeChanged =
+      dto.route !== undefined &&
+      JSON.stringify(dto.route) !== JSON.stringify(exists.route)
+    const started = hasWorkflowStarted(exists.workflowSteps)
 
-    if(routeChanged&&started){
-      try{
-        assertRouteOnlyAdds(exists.route,dto.route!)
-      }catch(e){
+    if (routeChanged && started) {
+      try {
+        assertRouteOnlyAdds(exists.route, dto.route!)
+      } catch (e) {
         throw new BadRequestException(
           e instanceof Error
             ? e.message
@@ -387,12 +372,13 @@ export class TasksService{
           : undefined,
     }
 
-    await this.prisma.$transaction(async tx=>{
+    await this.prisma.$transaction(async tx => {
       await tx.task.update({
-        where:{ id },
-        data:updateData,
+        where: { id },
+        data: updateData,
       })
 
+      // Merge por (materialId, thicknessId): conserva ids → el DXF sigue amarrado.
       if (linesToWrite) {
         const existing = await tx.taskMaterialLine.findMany({
           where: { taskId: id },
@@ -405,6 +391,7 @@ export class TasksService{
           },
           orderBy: { sortOrder: "asc" },
         })
+
         const used = new Set<string>()
         const plan: Array<{
           existingId?: string
@@ -413,6 +400,7 @@ export class TasksService{
           pieces: number
           sortOrder: number
         }> = []
+
         for (const line of linesToWrite) {
           const match = existing.find(
             e =>
@@ -438,7 +426,9 @@ export class TasksService{
             })
           }
         }
+
         const toDelete = existing.filter(e => !used.has(e.id)).map(e => e.id)
+
         if (toDelete.length > 0) {
           await tx.detailAsset.updateMany({
             where: {
@@ -452,6 +442,7 @@ export class TasksService{
             where: { id: { in: toDelete } },
           })
         }
+
         for (const p of plan) {
           if (p.existingId) {
             await tx.taskMaterialLine.update({
@@ -475,57 +466,54 @@ export class TasksService{
         }
       }
 
-      if(!routeChanged) return
+      if (!routeChanged) return
 
-      if(started){
-        // Solo agregar: conservar pasos existentes, crear los nuevos
+      if (started) {
         const { toKeep, toCreate, toDelete } = planWorkflowMerge(
           dto.route!,
           exists.workflowSteps,
         )
 
-        if(toDelete.length>0){
+        if (toDelete.length > 0) {
           await tx.workflowStep.deleteMany({
-            where:{ id:{ in: toDelete } },
+            where: { id: { in: toDelete } },
           })
         }
 
-        for(const step of toKeep){
+        for (const step of toKeep) {
           await tx.workflowStep.update({
-            where:{ id: step.id },
-            data:{ order: step.order },
+            where: { id: step.id },
+            data: { order: step.order },
           })
         }
 
-        if(toCreate.length>0){
+        if (toCreate.length > 0) {
           await tx.workflowStep.createMany({
-            data: toCreate.map(step=>({
+            data: toCreate.map(step => ({
               ...step,
               taskId: id,
             })),
           })
         }
       } else {
-        // Ruta aún no iniciada: rebuild completo
         await tx.workflowStep.deleteMany({
-          where:{ taskId:id },
+          where: { taskId: id },
         })
 
         await tx.workflowStep.createMany({
-          data:buildWorkflow(dto.route!).map(step=>({
+          data: buildWorkflow(dto.route!).map(step => ({
             ...step,
-            taskId:id,
+            taskId: id,
           })),
         })
       }
     })
 
-    const task=
-      await this.prisma.task.findUnique({
-        where:{ id },
-        relationLoadStrategy:"join",
-        include:this.includeRelations,
-      })
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      relationLoadStrategy: "join",
+      include: this.includeRelations,
+    })
 
     if (!task) {
       throw new NotFoundException("Task not found")
@@ -544,20 +532,15 @@ export class TasksService{
     return mapped
   }
 
-  async reorder(
-    items: ReorderTaskItemDto[],
-    userId:string,
-  ){
-    if(items.length===0){
+  async reorder(items: ReorderTaskItemDto[], userId: string) {
+    if (items.length === 0) {
       return items
     }
 
-    const ids=Prisma.join(items.map(item=>item.id))
+    const ids = Prisma.join(items.map(item => item.id))
 
-    const positionCases=Prisma.join(
-      items.map(item=>
-        Prisma.sql`WHEN ${item.id} THEN ${item.position}`,
-      ),
+    const positionCases = Prisma.join(
+      items.map(item => Prisma.sql`WHEN ${item.id} THEN ${item.position}`),
       " ",
     )
 
@@ -568,50 +551,45 @@ export class TasksService{
     `
 
     this.realtime.publish({
-      entity:"TASK",
-      action:"REORDERED",
-      id:"bulk",
-      payload:items,
-      excludeUserId:userId,
+      entity: "TASK",
+      action: "REORDERED",
+      id: "bulk",
+      payload: items,
+      excludeUserId: userId,
     })
 
     return items
   }
 
-  async remove(id:string,userId:string){
-    const exists=await this.prisma.task.findUnique({
-      where:{ id },
-      select:{ id:true },
+  async remove(id: string, userId: string) {
+    const exists = await this.prisma.task.findUnique({
+      where: { id },
+      select: { id: true },
     })
 
-    if(!exists){
+    if (!exists) {
       throw new NotFoundException("Task not found")
     }
 
-    const task=
-      await this.prisma.task.update({
-        where:{ id },
-        data:{
-          deletedAt:new Date(),
-          updatedById:userId,
-        },
-
-      })
+    const task = await this.prisma.task.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        updatedById: userId,
+      },
+    })
 
     this.realtime.publish({
-      entity:"TASK",
-      action:"DELETED",
+      entity: "TASK",
+      action: "DELETED",
       id,
-      excludeUserId:userId,
+      excludeUserId: userId,
     })
 
     return task
   }
 
-  private async getNextLotValue(
-    projectId: string,
-  ): Promise<number> {
-
+  private async getNextLotValue(projectId: string): Promise<number> {
     const lastTask = await this.prisma.task.findFirst({
       where: {
         projectId,
@@ -626,16 +604,11 @@ export class TasksService{
     })
 
     return (lastTask?.lotNumber ?? 0) + 1
-
   }
 
-  async getNextLot(
-    projectId: string,
-  ) {
-
+  async getNextLot(projectId: string) {
     return {
       nextLot: await this.getNextLotValue(projectId),
     }
-
   }
 }
