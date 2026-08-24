@@ -149,7 +149,7 @@ export class TasksService{
   /**
    * Aplana `_count` de Prisma → contadores estables en la API.
    * - commentCount: mensajes de la tarea (no de pasos)
-   * - detailAssetCount: fotos / notas / DXF ligados a la tarea
+   * - detailAssetCount: fotos / notas / DXF ligados a la tarea + DXF por línea de material
    * También aplana commentCount en cada workflowStep.
    */
   private withCommentCount<T extends {
@@ -166,11 +166,17 @@ export class TasksService{
         commentCount: stepCount?.comments ?? 0,
       }
     })
+
+    const dxfCount = (row as { materialLines?: Array<{ detailAssets?: unknown[] }> }).materialLines?.reduce(
+      (n, l) => n + (l.detailAssets?.length ?? 0),
+      0,
+    ) ?? 0
+
     const base = {
       ...rest,
       ...(steps ? { workflowSteps: steps } : {}),
       commentCount: _count?.comments ?? 0,
-      detailAssetCount: _count?.detailAssets ?? 0,
+      detailAssetCount: (_count?.detailAssets ?? 0) + dxfCount,
     }
     // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null
     return withCalendarDates(base as Record<string, unknown>) as typeof base
@@ -476,11 +482,6 @@ export class TasksService{
       return items
     }
 
-    // Mismo fix que en ProjectsService.reorder: N updates dentro de
-    // un $transaction([...]) se comían el timeout DEFAULT de Prisma
-    // de 5000ms para la transacción completa (P2028) con listas de
-    // varios ítems, tirando 500 tras ~5s de espera. Un solo UPDATE
-    // con CASE WHEN resuelve todas las posiciones en un round-trip.
     const ids=Prisma.join(items.map(item=>item.id))
 
     const positionCases=Prisma.join(
@@ -496,21 +497,6 @@ export class TasksService{
       WHERE "id" IN (${ids})
     `
 
-    // Antes: acá se hacía this.findAll() completo (con TODOS los
-    // includes pesados: project+client+stage+status+pm+priority+
-    // material+thickness+color+workflowSteps+operator) SOLO para
-    // poder mandar el nuevo orden por realtime — reordenar 2 tareas
-    // en un drag-and-drop disparaba el mismo payload gigante que
-    // cargar la tabla entera. Lo único que en verdad cambió es
-    // "position" en cada tarea reordenada — eso es lo único que se
-    // manda ahora.
-    //
-    // También se sacó el segundo publish (entity:"PROCESS",
-    // action:"UPDATED") que estaba acá: mandaba el mismo array de
-    // tareas, pero processHandler.ts espera un WorkflowResponse
-    // individual (lo que usan start/pause/resume/etc) — mismatch de
-    // tipos, no hacía nada útil, solo duplicaba el envío del mismo
-    // payload pesado por la red a cada cliente conectado.
     this.realtime.publish({
       entity:"TASK",
       action:"REORDERED",
