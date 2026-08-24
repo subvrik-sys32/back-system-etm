@@ -86,31 +86,51 @@ export class DetailAssetsService {
   async listForTask(taskId: string, user: CurrentUserType) {
     if (!this.canRead(user, "task")) throw new ForbiddenException("Sin permiso")
 
-    const taskAssets = await this.prisma.detailAsset.findMany({
-      where: { taskId, materialLineId: null, deletedAt: null },
-      select: this.assetSelect,
-      orderBy: [{ kind: "asc" }, { sortOrder: "asc" }],
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+      select: { id: true, projectId: true },
     })
+    if (!task) throw new NotFoundException("Tarea no encontrada")
 
-    const lines = await this.prisma.taskMaterialLine.findMany({
-      where: { taskId },
-      select: {
-        id: true,
-        pieces: true,
-        sortOrder: true,
-        material: { select: { id: true, name: true, color: true } },
-        thickness: { select: { id: true, name: true } },
-        detailAssets: {
-          where: { deletedAt: null, kind: DetailAssetKind.DXF },
-          select: this.assetSelect,
-          take: 1,
+    const [taskAssets, projectAssets, lines] = await Promise.all([
+      this.prisma.detailAsset.findMany({
+        where: { taskId, materialLineId: null, deletedAt: null },
+        select: this.assetSelect,
+        orderBy: [{ kind: "asc" }, { sortOrder: "asc" }],
+      }),
+      // Herencia proyecto → tarea (fotos/notas del proyecto)
+      this.prisma.detailAsset.findMany({
+        where: {
+          projectId: task.projectId,
+          materialLineId: null,
+          deletedAt: null,
+          kind: { in: [DetailAssetKind.PHOTO, DetailAssetKind.NOTE] },
         },
-      },
-      orderBy: { sortOrder: "asc" },
-    })
+        select: this.assetSelect,
+        orderBy: [{ kind: "asc" }, { sortOrder: "asc" }],
+      }),
+      this.prisma.taskMaterialLine.findMany({
+        where: { taskId },
+        select: {
+          id: true,
+          pieces: true,
+          sortOrder: true,
+          material: { select: { id: true, name: true, color: true } },
+          thickness: { select: { id: true, name: true } },
+          detailAssets: {
+            where: { deletedAt: null, kind: DetailAssetKind.DXF },
+            select: this.assetSelect,
+            take: 1,
+          },
+        },
+        orderBy: { sortOrder: "asc" },
+      }),
+    ])
 
     return {
       taskAssets,
+      /** Fotos/notas del proyecto: visibles en tarea y procesos (read-through). */
+      projectAssets,
       materialLines: lines.map(l => ({
         id: l.id,
         pieces: l.pieces,

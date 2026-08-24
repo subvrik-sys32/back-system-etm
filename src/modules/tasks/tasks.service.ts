@@ -34,6 +34,12 @@ export class TasksService {
             icon: true,
           },
         },
+        _count: {
+          select: {
+            // herencia: fotos/notas del proyecto cuentan en el badge de la tarea
+            detailAssets: { where: { deletedAt: null } },
+          },
+        },
       },
     },
     priority: true,
@@ -152,11 +158,12 @@ export class TasksService {
    */
   private withCommentCount<T extends {
     _count?: { comments?: number; detailAssets?: number } | null
+    project?: { _count?: { detailAssets?: number } | null } | null
     workflowSteps?: ReadonlyArray<
       { _count?: { comments?: number } | null } & Record<string, unknown>
     > | null
   }>(row: T) {
-    const { _count, workflowSteps, ...rest } = row
+    const { _count, workflowSteps, project, ...rest } = row
     const steps = workflowSteps?.map(step => {
       const { _count: stepCount, ...stepRest } = step
       return {
@@ -165,11 +172,23 @@ export class TasksService {
       }
     })
 
+    // propios de la tarea + herencia del proyecto (fotos/notas)
+    const projectAssetCount = project?._count?.detailAssets ?? 0
+    const projectClean = project
+      ? (() => {
+          const { _count: _pc, ...pRest } = project as {
+            _count?: unknown
+          } & Record<string, unknown>
+          return pRest
+        })()
+      : project
+
     const base = {
       ...rest,
+      ...(projectClean !== undefined ? { project: projectClean } : {}),
       ...(steps ? { workflowSteps: steps } : {}),
       commentCount: _count?.comments ?? 0,
-      detailAssetCount: _count?.detailAssets ?? 0,
+      detailAssetCount: (_count?.detailAssets ?? 0) + projectAssetCount,
     }
     return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
