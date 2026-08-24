@@ -149,7 +149,7 @@ export class TasksService{
   /**
    * Aplana `_count` de Prisma → contadores estables en la API.
    * - commentCount: mensajes de la tarea (no de pasos)
-   * - detailAssetCount: fotos / notas / DXF ligados a la tarea + DXF por línea de material
+   * - detailAssetCount: fotos / notas / DXF ligados a la tarea
    * También aplana commentCount en cada workflowStep.
    */
   private withCommentCount<T extends {
@@ -166,19 +166,14 @@ export class TasksService{
         commentCount: stepCount?.comments ?? 0,
       }
     })
-
-    const dxfCount = (row as { materialLines?: Array<{ detailAssets?: unknown[] }> }).materialLines?.reduce(
-      (n, l) => n + (l.detailAssets?.length ?? 0),
-      0,
-    ) ?? 0
-
+    // SSOT badge ojo: Prisma _count.detailAssets (deletedAt null)
+    // incluye fotos/notas y DXF (tienen taskId al subir).
     const base = {
       ...rest,
       ...(steps ? { workflowSteps: steps } : {}),
       commentCount: _count?.comments ?? 0,
-      detailAssetCount: (_count?.detailAssets ?? 0) + dxfCount,
+      detailAssetCount: _count?.detailAssets ?? 0,
     }
-    // deliveryDate (tarea + project anidado) → "YYYY-MM-DD" | null
     return withCalendarDates(base as Record<string, unknown>) as typeof base
   }
 
@@ -399,10 +394,85 @@ export class TasksService{
       })
 
       if (linesToWrite) {
-        await tx.taskMaterialLine.deleteMany({ where: { taskId: id } })
-        await tx.taskMaterialLine.createMany({
-          data: linesToWrite.map((l) => ({ ...l, taskId: id })),
+        const existing = await tx.taskMaterialLine.findMany({
+          where: { taskId: id },
+          select: {
+            id: true,
+            materialId: true,
+            thicknessId: true,
+            pieces: true,
+            sortOrder: true,
+          },
+          orderBy: { sortOrder: "asc" },
         })
+        const used = new Set<string>()
+        const plan: Array<{
+          existingId?: string
+          materialId: string
+          thicknessId: string
+          pieces: number
+          sortOrder: number
+        }> = []
+        for (const line of linesToWrite) {
+          const match = existing.find(
+            e =>
+              !used.has(e.id) &&
+              e.materialId === line.materialId &&
+              e.thicknessId === line.thicknessId,
+          )
+          if (match) {
+            used.add(match.id)
+            plan.push({
+              existingId: match.id,
+              materialId: line.materialId,
+              thicknessId: line.thicknessId,
+              pieces: line.pieces,
+              sortOrder: line.sortOrder,
+            })
+          } else {
+            plan.push({
+              materialId: line.materialId,
+              thicknessId: line.thicknessId,
+              pieces: line.pieces,
+              sortOrder: line.sortOrder,
+            })
+          }
+        }
+        const toDelete = existing.filter(e => !used.has(e.id)).map(e => e.id)
+        if (toDelete.length > 0) {
+          await tx.detailAsset.updateMany({
+            where: {
+              materialLineId: { in: toDelete },
+              kind: "DXF",
+              deletedAt: null,
+            },
+            data: { deletedAt: new Date() },
+          })
+          await tx.taskMaterialLine.deleteMany({
+            where: { id: { in: toDelete } },
+          })
+        }
+        for (const p of plan) {
+          if (p.existingId) {
+            await tx.taskMaterialLine.update({
+              where: { id: p.existingId },
+              data: {
+                pieces: p.pieces,
+                sortOrder: p.sortOrder,
+              },
+            })
+          } else {
+            await tx.taskMaterialLine.create({
+              data: {
+                taskId: id,
+                materialId: p.materialId,
+                thicknessId: p.thicknessId,
+                pieces: p.pieces,
+                sortOrder: p.sortOrder,
+              },
+            })
+          }
+        }
       }
 
       if(!routeChanged) return

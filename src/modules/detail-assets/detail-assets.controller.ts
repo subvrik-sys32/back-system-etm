@@ -19,6 +19,7 @@ import { PermissionsGuard } from "@/shared/guards/permissions.guard"
 import { Permissions } from "@/shared/decorators/permissions.decorator"
 import { CurrentUser } from "@/shared/decorators/current-user.decorator"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
+import type { MulterFile } from "@/shared/types/multer-file"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -51,7 +52,7 @@ export class DetailAssetsController {
   )
   uploadProjectPhoto(
     @Param("projectId") projectId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @CurrentUser() user: CurrentUserType,
   ) {
     if (!file) throw new BadRequestException("Falta file")
@@ -65,7 +66,7 @@ export class DetailAssetsController {
   )
   uploadTaskPhoto(
     @Param("taskId") taskId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @CurrentUser() user: CurrentUserType,
   ) {
     if (!file) throw new BadRequestException("Falta file")
@@ -100,7 +101,7 @@ export class DetailAssetsController {
   )
   uploadDxf(
     @Param("lineId") lineId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @CurrentUser() user: CurrentUserType,
   ) {
     if (!file) throw new BadRequestException("Falta file")

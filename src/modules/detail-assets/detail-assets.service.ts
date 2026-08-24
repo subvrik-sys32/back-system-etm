@@ -12,6 +12,7 @@ import { PrismaService } from "@/infra/database/prisma/prisma.service"
 import { SupabaseStorageService } from "@/infra/storage/supabase-storage.service"
 import { PermissionCode } from "@/core/enums/permission-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
+import type { MulterFile } from "@/shared/types/multer-file"
 
 const BUCKET = "detail-assets"
 const BACKUP_BUCKET = "detail-assets-backup"
@@ -19,7 +20,6 @@ const MAX_PHOTOS = 2
 const MAX_DXF_BYTES = 15 * 1024 * 1024
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
-/** Nombre de archivo seguro para storage, preservando el nombre original. */
 function sanitizeOriginalName(name: string, fallback = "piece.dxf"): string {
   const base = (name || fallback).trim() || fallback
   const cleaned = base
@@ -83,7 +83,6 @@ export class DetailAssetsService {
     })
   }
 
-  /** Task-level + DXF de material lines (process hereda sin duplicar). */
   async listForTask(taskId: string, user: CurrentUserType) {
     if (!this.canRead(user, "task")) throw new ForbiddenException("Sin permiso")
 
@@ -123,31 +122,51 @@ export class DetailAssetsService {
     }
   }
 
-  async uploadProjectPhoto(projectId: string, file: Express.Multer.File, user: CurrentUserType) {
+  async uploadProjectPhoto(projectId: string, file: MulterFile, user: CurrentUserType) {
     if (!this.canManage(user, "project")) throw new ForbiddenException("Sin permiso")
-    const ok = await this.prisma.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { id: true } })
+    const ok = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { id: true },
+    })
     if (!ok) throw new NotFoundException("Proyecto no encontrado")
-    const count = await this.prisma.detailAsset.count({ where: { projectId, kind: DetailAssetKind.PHOTO, deletedAt: null } })
+    const count = await this.prisma.detailAsset.count({
+      where: { projectId, kind: DetailAssetKind.PHOTO, deletedAt: null },
+    })
     if (count >= MAX_PHOTOS) throw new BadRequestException(`Máximo ${MAX_PHOTOS} fotos`)
     return this.saveImage({ file, projectId, createdById: user.id })
   }
 
-  async uploadTaskPhoto(taskId: string, file: Express.Multer.File, user: CurrentUserType) {
+  async uploadTaskPhoto(taskId: string, file: MulterFile, user: CurrentUserType) {
     if (!this.canManage(user, "task")) throw new ForbiddenException("Sin permiso")
-    const ok = await this.prisma.task.findFirst({ where: { id: taskId, deletedAt: null }, select: { id: true } })
+    const ok = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+      select: { id: true },
+    })
     if (!ok) throw new NotFoundException("Tarea no encontrada")
-    const count = await this.prisma.detailAsset.count({ where: { taskId, materialLineId: null, kind: DetailAssetKind.PHOTO, deletedAt: null } })
+    const count = await this.prisma.detailAsset.count({
+      where: { taskId, materialLineId: null, kind: DetailAssetKind.PHOTO, deletedAt: null },
+    })
     if (count >= MAX_PHOTOS) throw new BadRequestException(`Máximo ${MAX_PHOTOS} fotos`)
     return this.saveImage({ file, taskId, createdById: user.id })
   }
 
-  private async saveImage(args: { file: Express.Multer.File; projectId?: string; taskId?: string; createdById: string }) {
+  private async saveImage(args: {
+    file: MulterFile
+    projectId?: string
+    taskId?: string
+    createdById: string
+  }) {
     if (!args.file?.buffer?.length) throw new BadRequestException("Archivo vacío")
     if (args.file.size > MAX_PHOTO_BYTES) throw new BadRequestException("Foto > 8 MB")
     const allowed = ["image/png", "image/jpeg", "image/webp", "image/jpg"]
-    if (!allowed.includes(args.file.mimetype)) throw new BadRequestException("Formato no soportado")
+    if (!allowed.includes(args.file.mimetype)) {
+      throw new BadRequestException("Formato no soportado")
+    }
 
-    const publicUrl = await this.storage.uploadCompressedImage(BUCKET, args.file.buffer.toString("base64"))
+    const publicUrl = await this.storage.uploadCompressedImage(
+      BUCKET,
+      args.file.buffer.toString("base64"),
+    )
     const storageKey = publicUrl.split("/").pop() ?? `${randomUUID()}.webp`
 
     return this.prisma.detailAsset.create({
@@ -166,13 +185,29 @@ export class DetailAssetsService {
     })
   }
 
-  async upsertNote(scope: { projectId?: string; taskId?: string }, text: string, user: CurrentUserType) {
+  async upsertNote(
+    scope: { projectId?: string; taskId?: string },
+    text: string,
+    user: CurrentUserType,
+  ) {
     const isProject = Boolean(scope.projectId)
-    if (!this.canManage(user, isProject ? "project" : "task")) throw new ForbiddenException("Sin permiso")
+    if (!this.canManage(user, isProject ? "project" : "task")) {
+      throw new ForbiddenException("Sin permiso")
+    }
     const meta = { text: (text ?? "").slice(0, 4000) }
     const where = scope.projectId
-      ? { projectId: scope.projectId, kind: DetailAssetKind.NOTE, deletedAt: null, materialLineId: null }
-      : { taskId: scope.taskId!, kind: DetailAssetKind.NOTE, deletedAt: null, materialLineId: null }
+      ? {
+          projectId: scope.projectId,
+          kind: DetailAssetKind.NOTE,
+          deletedAt: null,
+          materialLineId: null,
+        }
+      : {
+          taskId: scope.taskId!,
+          kind: DetailAssetKind.NOTE,
+          deletedAt: null,
+          materialLineId: null,
+        }
 
     const existing = await this.prisma.detailAsset.findFirst({ where })
     if (existing) {
@@ -197,13 +232,19 @@ export class DetailAssetsService {
     })
   }
 
-  async uploadMaterialLineDxf(materialLineId: string, file: Express.Multer.File, user: CurrentUserType) {
+  async uploadMaterialLineDxf(
+    materialLineId: string,
+    file: MulterFile,
+    user: CurrentUserType,
+  ) {
     if (!this.canManage(user, "task")) throw new ForbiddenException("Sin permiso")
     const line = await this.prisma.taskMaterialLine.findUnique({
       where: { id: materialLineId },
       select: { id: true, taskId: true, task: { select: { deletedAt: true } } },
     })
-    if (!line || line.task.deletedAt) throw new NotFoundException("Línea de material no encontrada")
+    if (!line || line.task.deletedAt) {
+      throw new NotFoundException("Línea de material no encontrada")
+    }
     if (!file?.buffer?.length) throw new BadRequestException("Archivo vacío")
     if (file.size > MAX_DXF_BYTES) throw new BadRequestException("DXF > 15 MB")
     const name = (file.originalname || "").toLowerCase()
@@ -216,11 +257,13 @@ export class DetailAssetsService {
     })
     for (const prev of previous) {
       if (prev.storageKey) await this.storage.deleteFile(BUCKET, prev.storageKey)
-      await this.prisma.detailAsset.update({ where: { id: prev.id }, data: { deletedAt: new Date() } })
+      await this.prisma.detailAsset.update({
+        where: { id: prev.id },
+        data: { deletedAt: new Date() },
+      })
     }
 
     const originalName = sanitizeOriginalName(file.originalname || "piece.dxf")
-    // Misma carpeta; nombre = el que cargó el usuario (colisión → sufijo corto)
     let storageKey = `dxf/${line.taskId}/${materialLineId}/${originalName}`
     const collision = await this.prisma.detailAsset.findFirst({
       where: { storageKey, deletedAt: null },
@@ -251,28 +294,50 @@ export class DetailAssetsService {
   }
 
   async remove(id: string, user: CurrentUserType) {
-    const asset = await this.prisma.detailAsset.findFirst({ where: { id, deletedAt: null } })
+    const asset = await this.prisma.detailAsset.findFirst({
+      where: { id, deletedAt: null },
+    })
     if (!asset) throw new NotFoundException("Asset no encontrado")
     const scope: "task" | "project" = asset.projectId ? "project" : "task"
     if (!this.canManage(user, scope)) throw new ForbiddenException("Sin permiso")
     if (asset.storageKey) await this.storage.deleteFile(BUCKET, asset.storageKey)
-    await this.prisma.detailAsset.update({ where: { id }, data: { deletedAt: new Date() } })
+    await this.prisma.detailAsset.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    })
     return { ok: true }
   }
 
-  /** Tareas finalizadas: el DXF sigue visible hasta purge. Backup → borra caliente. */
-  async purgeDxf(user: CurrentUserType, opts: { olderThanDays?: number; dryRun?: boolean } = {}) {
+  async purgeDxf(
+    user: CurrentUserType,
+    opts: { olderThanDays?: number; dryRun?: boolean } = {},
+  ) {
     const p = user.permissions ?? []
-    if (!p.includes(PermissionCode.TASK_DELETE) && !p.includes(PermissionCode.PROJECT_DELETE)) {
+    if (
+      !p.includes(PermissionCode.TASK_DELETE) &&
+      !p.includes(PermissionCode.PROJECT_DELETE)
+    ) {
       throw new ForbiddenException("Sin permiso de depuración")
     }
     const days = Math.max(1, opts.olderThanDays ?? 7)
     const cutoff = new Date(Date.now() - days * 86400000)
     const candidates = await this.prisma.detailAsset.findMany({
-      where: { kind: DetailAssetKind.DXF, deletedAt: null, createdAt: { lt: cutoff } },
-      select: { id: true, storageKey: true, originalName: true, createdAt: true, taskId: true },
+      where: {
+        kind: DetailAssetKind.DXF,
+        deletedAt: null,
+        createdAt: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        storageKey: true,
+        originalName: true,
+        createdAt: true,
+        taskId: true,
+      },
     })
-    if (opts.dryRun) return { dryRun: true, count: candidates.length, items: candidates }
+    if (opts.dryRun) {
+      return { dryRun: true, count: candidates.length, items: candidates }
+    }
 
     let backed = 0
     let removed = 0
