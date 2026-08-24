@@ -128,4 +128,4 @@ export class DetailAssetsController {
       dryRun: dryRun === "1" || dryRun === "true",
     })
   }
-}
+} 
