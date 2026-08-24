@@ -2,7 +2,7 @@ import type { Point2D } from "../../nesting/engine/types"
 import { classifyDxfColor } from "./classify-dxf-color"
 import { emptyCadData, type CadData, type CadEntity } from "./types"
 import { sampleArc, sampleBulgeArc, sampleCircle } from "./geometry-sampling"
-import { type Fragment, chainAndDedupe } from "./chain-fragments"
+import { type Fragment } from "./chain-fragments"
 
 interface PolyVertex {
   x: number
@@ -223,12 +223,15 @@ export function parseDxf(fileContent: string): CadData {
   //    un solo pool geométrico (ver el comentario dentro de
   //    chainFragments sobre por qué ya no se agrupa por capa+color
   //    antes de esto).
-  const chains = chainAndDedupe(rawFragments)
-  const chainedEntities: CadEntity[] = chains.map((c) => ({
-    outline: { points: c.points },
-    layer: c.layer,
-    color: c.color,
-  }))
+  // Preview / mosaico / multi-contorno: cada POLYLINE del archivo es una
+  // entidad. chainAndDedupe sirve para silueta de UNA pieza, no para layout.
+  const rawEntities: CadEntity[] = rawFragments
+    .filter((f) => f.points.length >= 2)
+    .map((f) => ({
+      outline: { points: f.points },
+      layer: f.layer,
+      color: f.color,
+    }))
 
   // Bounding box + normalizado a origen (0,0). El original también
   // invierte Y acá porque Qt dibuja con Y hacia abajo; nuestro modelo
@@ -249,7 +252,7 @@ export function parseDxf(fileContent: string): CadData {
   const height = maxY - minY
   const normalize = (p: Point2D): Point2D => ({ x: p.x - minX, y: p.y - minY })
 
-  const normalizedEntities = chainedEntities.map((e) => ({
+  const normalizedEntities = rawEntities.map((e) => ({
     ...e,
     outline: { points: e.outline.points.map(normalize) },
   }))

@@ -32,16 +32,24 @@ function cadDataToNestingPiece(id: string, cad: CadData): NestingPiece {
  * Tras normalizar minY≈0, equivale a y' = maxY - y.
  */
 function flipYPiece(piece: NestingPiece): NestingPiece {
-  const ys = [
-    ...piece.outline.points.map((p) => p.y),
-    ...(piece.subEntities ?? []).flatMap((s) =>
-      s.outline.points.map((p) => p.y),
-    ),
-  ]
-  if (!ys.length) return piece
+  // DXF exportado por nesting (MARCO_CHAPA) ya está en Y-down del canvas.
+  // No volver a voltear: eso invierte filas del mosaico y de planchas.
+  const fromNesting = (piece.subEntities ?? []).some((s) =>
+    (s.layer ?? "").toUpperCase().includes("MARCO_CHAPA"),
+  )
+  if (fromNesting) return piece
 
-  const maxY = Math.max(...ys)
-  const minY = Math.min(...ys)
+  let minY = Infinity
+  let maxY = -Infinity
+  const eat = (pts: { y: number }[]) => {
+    for (const p of pts) {
+      if (p.y < minY) minY = p.y
+      if (p.y > maxY) maxY = p.y
+    }
+  }
+  eat(piece.outline.points)
+  for (const sub of piece.subEntities ?? []) eat(sub.outline.points)
+  if (!Number.isFinite(minY)) return piece
   const fy = (p: { x: number; y: number }) => ({
     x: p.x,
     y: maxY - p.y + minY,
