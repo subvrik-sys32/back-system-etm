@@ -22,6 +22,8 @@ function cadDataToNestingPiece(id: string, cad: CadData): NestingPiece {
       outline: e.outline,
       color: e.color != null ? String(e.color) : undefined,
       layer: e.layer,
+      text: e.text,
+      textHeight: e.textHeight,
     })),
     quantity: 1,
   }

@@ -3,13 +3,17 @@ import type { PieceOutline, Point2D } from "../../nesting/engine/types"
 /**
  * Equivalente a CadEntidad del original: una entidad individual (línea,
  * arco, círculo o segmento de polilínea ya tesselado a puntos) con su
- * capa y color clasificado.
+ * capa y color clasificado. TEXT/MTEXT: outline.points = [insertion].
  */
 export interface CadEntity {
   outline: PieceOutline
   layer: string
   /** Color hexadecimal, ej. "#00FF00" (corte) o "#FFA500" (doblez/marca). */
   color: string
+  /** Si está definido, es una etiqueta TEXT (no geometría de corte). */
+  text?: string
+  /** Altura de texto DXF (código 40), en unidades del dibujo. */
+  textHeight?: number
 }
 
 /**

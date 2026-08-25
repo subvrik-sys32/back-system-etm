@@ -1,0 +1,157 @@
+diff --git a/src/modules/engineering/cad/rich/dxf-parser.ts b/src/modules/engineering/cad/rich/dxf-parser.ts
+index f61dce6..9731c59 100644
+--- a/src/modules/engineering/cad/rich/dxf-parser.ts
++++ b/src/modules/engineering/cad/rich/dxf-parser.ts
+@@ -49,7 +49,13 @@ export function parseDxf(fileContent: string): CadData {
+   let isClosedPoly = false
+   let inOldPolyline = false
+ 
++  let textValue = ""
++  let textHeight = 0
++  let textX = 0
++  let textY = 0
++
+   const rawFragments: Fragment[] = []
++  const textEntities: CadEntity[] = []
+   const allPoints: Point2D[] = []
+ 
+   const commitEntity = () => {
+@@ -68,6 +74,26 @@ export function parseDxf(fileContent: string): CadData {
+     let points: Point2D[] = []
+     let closingEdge: Point2D[] | null = null
+ 
++    if (currentType === "TEXT") {
++      if (textValue && textHeight > 0) {
++        const pos = { x: textX, y: textY }
++        allPoints.push(pos)
++        textEntities.push({
++          outline: { points: [pos] },
++          layer: currentLayer,
++          color: classifyDxfColor(currentColor),
++          text: textValue,
++          textHeight,
++        })
++      }
++      textValue = ""
++      textHeight = 0
++      textX = 0
++      textY = 0
++      currentType = ""
++      return
++    }
++
+     if (currentType === "LINE") {
+       if (Math.abs(x1 - x2) > 0.001 || Math.abs(y1 - y2) > 0.001) {
+         points = [
+@@ -154,13 +180,23 @@ export function parseDxf(fileContent: string): CadData {
+       } else {
+         if (!inOldPolyline) commitEntity()
+ 
+-        if (valStr === "LINE" || valStr === "ARC" || valStr === "CIRCLE" || valStr === "LWPOLYLINE") {
++        if (
++          valStr === "LINE" ||
++          valStr === "ARC" ||
++          valStr === "CIRCLE" ||
++          valStr === "LWPOLYLINE" ||
++          valStr === "TEXT"
++        ) {
+           currentType = valStr
+           currentLayer = "0"
+           currentColor = 256
+           currentLinetype = "CONTINUOUS"
+           extZ = 1.0
+           x1 = y1 = x2 = y2 = cx = cy = r = startAng = endAng = 0
++          textValue = ""
++          textHeight = 0
++          textX = 0
++          textY = 0
+           inOldPolyline = false
+         } else if (valStr === "POLYLINE") {
+           inOldPolyline = true
+@@ -211,6 +247,11 @@ export function parseDxf(fileContent: string): CadData {
+       } else if (code === 42 && polyVertices.length > 0) {
+         polyVertices[polyVertices.length - 1].bulge = parseFloat(valStr)
+       }
++    } else if (currentType === "TEXT") {
++      if (code === 10) textX = parseFloat(valStr)
++      else if (code === 20) textY = parseFloat(valStr)
++      else if (code === 40) textHeight = parseFloat(valStr)
++      else if (code === 1) textValue = valStr
+     }
+   }
+   commitEntity()
+@@ -225,13 +266,16 @@ export function parseDxf(fileContent: string): CadData {
+   //    antes de esto).
+   // Preview / mosaico / multi-contorno: cada POLYLINE del archivo es una
+   // entidad. chainAndDedupe sirve para silueta de UNA pieza, no para layout.
+-  const rawEntities: CadEntity[] = rawFragments
+-    .filter((f) => f.points.length >= 2)
+-    .map((f) => ({
+-      outline: { points: f.points },
+-      layer: f.layer,
+-      color: f.color,
+-    }))
++  const rawEntities: CadEntity[] = [
++    ...rawFragments
++      .filter((f) => f.points.length >= 2)
++      .map((f) => ({
++        outline: { points: f.points },
++        layer: f.layer,
++        color: f.color,
++      })),
++    ...textEntities,
++  ]
+ 
+   // Bounding box + normalizado a origen (0,0). El original también
+   // invierte Y acá porque Qt dibuja con Y hacia abajo; nuestro modelo
+diff --git a/src/modules/engineering/cad/rich/types.ts b/src/modules/engineering/cad/rich/types.ts
+index 67f7ee7..cddd388 100644
+--- a/src/modules/engineering/cad/rich/types.ts
++++ b/src/modules/engineering/cad/rich/types.ts
+@@ -3,13 +3,17 @@ import type { PieceOutline, Point2D } from "../../nesting/engine/types"
+ /**
+  * Equivalente a CadEntidad del original: una entidad individual (línea,
+  * arco, círculo o segmento de polilínea ya tesselado a puntos) con su
+- * capa y color clasificado.
++ * capa y color clasificado. TEXT/MTEXT: outline.points = [insertion].
+  */
+ export interface CadEntity {
+   outline: PieceOutline
+   layer: string
+   /** Color hexadecimal, ej. "#00FF00" (corte) o "#FFA500" (doblez/marca). */
+   color: string
++  /** Si está definido, es una etiqueta TEXT (no geometría de corte). */
++  text?: string
++  /** Altura de texto DXF (código 40), en unidades del dibujo. */
++  textHeight?: number
+ }
+ 
+ /**
+diff --git a/src/modules/engineering/nesting/engine/types.ts b/src/modules/engineering/nesting/engine/types.ts
+index 38c3ef3..96f62d7 100644
+--- a/src/modules/engineering/nesting/engine/types.ts
++++ b/src/modules/engineering/nesting/engine/types.ts
+@@ -29,6 +29,10 @@ export interface SubEntity {
+   color?: string;
+   /** Nombre de capa original del DXF/GEO (grupo 8 en DXF). Ausente para piezas sin origen CAD real (ej. rectángulos manuales). */
+   layer?: string;
++  /** Etiqueta TEXT/MTEXT del DXF (ej. "PLANCHA 1"). outline.points[0] = inserción. */
++  text?: string;
++  /** Altura de texto DXF (código 40). */
++  textHeight?: number;
+ }
+ 
+ /** Pieza de entrada para el nesting. */
+diff --git a/src/modules/engineering/services/cad-parse.service.ts b/src/modules/engineering/services/cad-parse.service.ts
+index 73e5caa..20eedc5 100644
+--- a/src/modules/engineering/services/cad-parse.service.ts
++++ b/src/modules/engineering/services/cad-parse.service.ts
+@@ -22,6 +22,8 @@ function cadDataToNestingPiece(id: string, cad: CadData): NestingPiece {
+       outline: e.outline,
+       color: e.color != null ? String(e.color) : undefined,
+       layer: e.layer,
++      text: e.text,
++      textHeight: e.textHeight,
+     })),
+     quantity: 1,
+   }

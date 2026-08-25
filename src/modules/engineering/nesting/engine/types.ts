@@ -29,6 +29,10 @@ export interface SubEntity {
   color?: string;
   /** Nombre de capa original del DXF/GEO (grupo 8 en DXF). Ausente para piezas sin origen CAD real (ej. rectángulos manuales). */
   layer?: string;
+  /** Etiqueta TEXT/MTEXT del DXF (ej. "PLANCHA 1"). outline.points[0] = inserción. */
+  text?: string;
+  /** Altura de texto DXF (código 40). */
+  textHeight?: number;
 }
 
 /** Pieza de entrada para el nesting. */
