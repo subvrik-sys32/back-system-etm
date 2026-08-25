@@ -13,6 +13,7 @@ const MARK_LAYER_SUBSTRINGS = [
   "BIEGE",
   "SIGN",
   "GRAV",
+  "LEYENDA",
   "FORM",
   "-BL",
   "_BL", // SPI "Bend Lines" (dobleces)

@@ -81,7 +81,7 @@ export function parseDxf(fileContent: string): CadData {
         textEntities.push({
           outline: { points: [pos] },
           layer: currentLayer,
-          color: classifyDxfColor(currentColor),
+          color: classifyDxfColor(currentLayer, currentColor),
           text: textValue,
           textHeight,
         })
