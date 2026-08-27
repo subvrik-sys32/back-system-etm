@@ -248,6 +248,14 @@ export class NotificationRepository{
     })
   }
 
+  /** Al editar un comentario, el snippet de las notis debe seguir el texto nuevo. */
+  updateSnippetByCommentId(commentId:string, messageSnippet:string){
+    return this.prisma.notification.updateMany({
+      where:{ commentId },
+      data:{ messageSnippet },
+    })
+  }
+
   // "Desconvocar" — deshace lo que hizo notifyTaskAssignment. Trae
   // los ids ANTES de borrar porque el caller necesita avisarle al
   // destinatario por realtime cuáles desaparecieron (mismo patrón

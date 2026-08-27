@@ -293,6 +293,19 @@ export class CommentsService{
       excludeUserId:userId,
     })
 
+    // Notificaciones ya enviadas deben mostrar el texto nuevo, no el de creación.
+    await this.notificationsService
+      .syncSnippetFromComment(
+        comment.id,
+        comment.message ?? "",
+        Boolean(comment.imageUrl),
+      )
+      .catch(err =>
+        this.logger.warn(
+          `syncSnippetFromComment falló para ${comment.id}: ${String(err)}`,
+        ),
+      )
+
     return comment
   }
 

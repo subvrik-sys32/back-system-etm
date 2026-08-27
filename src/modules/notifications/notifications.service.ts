@@ -231,6 +231,46 @@ export class NotificationsService{
 
   }
 
+  /**
+   * Comentario editado → actualizar messageSnippet en todas las notis
+   * ligadas y avisar por realtime (NOTIFICATION UPDATED).
+   */
+  async syncSnippetFromComment(
+    commentId: string,
+    message: string,
+    hasImage = false,
+  ) {
+    const snippet =
+      message.trim().length > 0
+        ? message.length > 140
+          ? `${message.slice(0, 140)}...`
+          : message
+        : hasImage
+          ? "📷 Foto"
+          : ""
+
+    await this.notificationRepository.updateSnippetByCommentId(
+      commentId,
+      snippet,
+    )
+
+    const notifications =
+      await this.notificationRepository.findManyByComment(commentId)
+
+    for (const notification of notifications) {
+      const enriched = this.enrichNotification({
+        ...notification,
+        messageSnippet: snippet,
+      })
+      this.realtime.publishToUser(notification.userId, {
+        entity: "NOTIFICATION",
+        action: "UPDATED",
+        id: notification.id,
+        payload: enriched,
+      })
+    }
+  }
+
   async deleteByCommentId(commentId:string){
 
     let notifications

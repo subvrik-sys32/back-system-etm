@@ -1,0 +1,94 @@
+diff --git a/src/modules/comments/comments.service.ts b/src/modules/comments/comments.service.ts
+index 075f933..55a0472 100644
+--- a/src/modules/comments/comments.service.ts
++++ b/src/modules/comments/comments.service.ts
+@@ -293,6 +293,19 @@ export class CommentsService{
+       excludeUserId:userId,
+     })
+ 
++    // Notificaciones ya enviadas deben mostrar el texto nuevo, no el de creación.
++    await this.notificationsService
++      .syncSnippetFromComment(
++        comment.id,
++        comment.message ?? "",
++        Boolean(comment.imageUrl),
++      )
++      .catch(err =>
++        this.logger.warn(
++          `syncSnippetFromComment falló para ${comment.id}: ${String(err)}`,
++        ),
++      )
++
+     return comment
+   }
+ 
+diff --git a/src/modules/notifications/notifications.service.ts b/src/modules/notifications/notifications.service.ts
+index ef5db50..cf274b6 100644
+--- a/src/modules/notifications/notifications.service.ts
++++ b/src/modules/notifications/notifications.service.ts
+@@ -231,6 +231,46 @@ export class NotificationsService{
+ 
+   }
+ 
++  /**
++   * Comentario editado → actualizar messageSnippet en todas las notis
++   * ligadas y avisar por realtime (NOTIFICATION UPDATED).
++   */
++  async syncSnippetFromComment(
++    commentId: string,
++    message: string,
++    hasImage = false,
++  ) {
++    const snippet =
++      message.trim().length > 0
++        ? message.length > 140
++          ? `${message.slice(0, 140)}...`
++          : message
++        : hasImage
++          ? "📷 Foto"
++          : ""
++
++    await this.notificationRepository.updateSnippetByCommentId(
++      commentId,
++      snippet,
++    )
++
++    const notifications =
++      await this.notificationRepository.findManyByComment(commentId)
++
++    for (const notification of notifications) {
++      const enriched = this.enrichNotification({
++        ...notification,
++        messageSnippet: snippet,
++      })
++      this.realtime.publishToUser(notification.userId, {
++        entity: "NOTIFICATION",
++        action: "UPDATED",
++        id: notification.id,
++        payload: enriched,
++      })
++    }
++  }
++
+   async deleteByCommentId(commentId:string){
+ 
+     let notifications
+diff --git a/src/modules/notifications/repositories/notification.repository.ts b/src/modules/notifications/repositories/notification.repository.ts
+index 7751745..aad64d9 100644
+--- a/src/modules/notifications/repositories/notification.repository.ts
++++ b/src/modules/notifications/repositories/notification.repository.ts
+@@ -248,6 +248,14 @@ export class NotificationRepository{
+     })
+   }
+ 
++  /** Al editar un comentario, el snippet de las notis debe seguir el texto nuevo. */
++  updateSnippetByCommentId(commentId:string, messageSnippet:string){
++    return this.prisma.notification.updateMany({
++      where:{ commentId },
++      data:{ messageSnippet },
++    })
++  }
++
+   // "Desconvocar" — deshace lo que hizo notifyTaskAssignment. Trae
+   // los ids ANTES de borrar porque el caller necesita avisarle al
+   // destinatario por realtime cuáles desaparecieron (mismo patrón
