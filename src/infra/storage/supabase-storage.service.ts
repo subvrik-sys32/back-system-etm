@@ -231,4 +231,41 @@ export class SupabaseStorageService {
 
   }
 
+  /**
+   * Archivo genérico (PDF, DXF, etc.) desde data URI o base64 plano.
+   * Sin compresión sharp. Límite ~20 MB de buffer decodificado.
+   */
+  async uploadRawBase64(
+    bucket: string,
+    base64OrDataUri: string,
+    contentType: string,
+    fileNameHint?: string,
+  ): Promise<string> {
+    const commaIndex = base64OrDataUri.indexOf(",")
+    const rawBase64 =
+      commaIndex >= 0
+        ? base64OrDataUri.slice(commaIndex + 1)
+        : base64OrDataUri
+
+    const buffer = Buffer.from(rawBase64, "base64")
+    const MAX = 20 * 1024 * 1024
+    if (buffer.byteLength > MAX) {
+      throw new Error("El archivo supera el límite de 20 MB")
+    }
+
+    const extFromName = fileNameHint?.includes(".")
+      ? fileNameHint.slice(fileNameHint.lastIndexOf("."))
+      : ""
+    const extFromMime =
+      contentType === "application/pdf"
+        ? ".pdf"
+        : contentType.includes("dxf")
+          ? ".dxf"
+          : extFromName || ".bin"
+
+    const path = `${randomUUID()}${extFromMime}`
+    await this.uploadFile(bucket, path, buffer, contentType || "application/octet-stream")
+    return this.getPublicUrl(bucket, path)
+  }
+
 }

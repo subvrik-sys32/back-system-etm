@@ -7,6 +7,7 @@ import { PermissionCode } from "@/core/enums/permission-code.enum"
 import type { CurrentUserType } from "@/shared/types/current-user.types"
 
 const COMMENT_PHOTOS_BUCKET = "comment-photos"
+const COMMENT_FILES_BUCKET = "comment-files"
 
 @Injectable()
 export class CommentsService{
@@ -142,6 +143,41 @@ export class CommentsService{
     return this.storage.uploadCompressedImage(COMMENT_PHOTOS_BUCKET, imageBase64)
   }
 
+  private async uploadCommentAttachment(
+    fileBase64: string,
+    fileName?: string,
+    fileMime?: string,
+  ): Promise<{ url: string; name: string; mime: string }> {
+    const name = (fileName ?? "archivo").trim() || "archivo"
+    const lower = name.toLowerCase()
+    const mimeHint =
+      fileMime?.trim() ||
+      (fileBase64.startsWith("data:")
+        ? fileBase64.slice(5, fileBase64.indexOf(";"))
+        : "")
+
+    const isPdf = lower.endsWith(".pdf") || mimeHint === "application/pdf"
+    const isDxf =
+      lower.endsWith(".dxf") ||
+      mimeHint.includes("dxf") ||
+      mimeHint === "application/dxf"
+
+    if (!isPdf && !isDxf) {
+      throw new BadRequestException(
+        "Solo se permiten PDF o DXF como archivo adjunto.",
+      )
+    }
+
+    const resolvedMime = isPdf ? "application/pdf" : "application/dxf"
+    const url = await this.storage.uploadRawBase64(
+      COMMENT_FILES_BUCKET,
+      fileBase64,
+      resolvedMime,
+      name,
+    )
+    return { url, name, mime: resolvedMime }
+  }
+
   // No dejar responder cruzado entre contextos (ej. citar por id un
   // comentario de OTRA tarea, a mano, con el network tab abierto) —
   // el comentario padre tiene que vivir en el mismo lugar donde se
@@ -168,114 +204,140 @@ export class CommentsService{
 
   }
 
-  async createForTask(taskId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
-
-    if(!message?.trim()&&!imageBase64){
-      throw new BadRequestException("El comentario necesita texto o una foto.")
+  async createForTask(
+    taskId: string,
+    message: string | undefined,
+    userId: string,
+    imageBase64?: string,
+    parentId?: string,
+    file?: { base64: string; name?: string; mime?: string },
+  ) {
+    if (!message?.trim() && !imageBase64 && !file?.base64) {
+      throw new BadRequestException(
+        "El comentario necesita texto, una foto o un archivo (PDF/DXF).",
+      )
     }
-
-    if(parentId){
-      await this.assertSameContext(parentId,{ taskId, workflowStepId:null })
+    if (parentId) {
+      await this.assertSameContext(parentId, { taskId, workflowStepId: null })
     }
-
-    const imageUrl=
-      imageBase64
-        ?await this.uploadCommentPhoto(imageBase64)
-        :null
-
-    const comment=await this.commentRepository.createForTask(taskId,userId,message??"",imageUrl,parentId)
-
+    const imageUrl = imageBase64
+      ? await this.uploadCommentPhoto(imageBase64)
+      : null
+    const attachment = file?.base64
+      ? await this.uploadCommentAttachment(file.base64, file.name, file.mime)
+      : null
+    const comment = await this.commentRepository.createForTask(
+      taskId, userId, message ?? "", imageUrl, parentId, attachment,
+    )
     this.realtime.publish({
-      entity:"COMMENT",
-      action:"CREATED",
-      id:comment.id,
-      payload:comment,
-      excludeUserId:userId,
+      entity: "COMMENT", action: "CREATED", id: comment.id,
+      payload: comment, excludeUserId: userId,
     })
-
+    const notifyMsg =
+      comment.message?.trim() ||
+      (attachment ? `📎 ${attachment.name}` : "") ||
+      (imageUrl ? "📷 Foto" : "")
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId!, projectId:null, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
+      {
+        id: comment.id, taskId: comment.taskId!, projectId: null,
+        workflowStepId: null, message: notifyMsg,
+        hasImage: !!imageUrl || !!attachment,
+      },
       userId,
     )
-
     return comment
   }
 
-  async createForWorkflowStep(workflowStepId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
-
-    if(!message?.trim()&&!imageBase64){
-      throw new BadRequestException("El comentario necesita texto o una foto.")
+  async createForWorkflowStep(
+    workflowStepId: string,
+    message: string | undefined,
+    userId: string,
+    imageBase64?: string,
+    parentId?: string,
+    file?: { base64: string; name?: string; mime?: string },
+  ) {
+    if (!message?.trim() && !imageBase64 && !file?.base64) {
+      throw new BadRequestException(
+        "El comentario necesita texto, una foto o un archivo (PDF/DXF).",
+      )
     }
-
-    const taskId=await this.commentRepository.getWorkflowStepTaskId(workflowStepId)
-
-    if(!taskId){
-      throw new NotFoundException("Workflow step not found")
+    const taskId = await this.commentRepository.getWorkflowStepTaskId(workflowStepId)
+    if (!taskId) throw new NotFoundException("Workflow step not found")
+    if (parentId) {
+      await this.assertSameContext(parentId, { taskId, workflowStepId })
     }
-
-    if(parentId){
-      await this.assertSameContext(parentId,{ taskId, workflowStepId })
-    }
-
-    const imageUrl=
-      imageBase64
-        ?await this.uploadCommentPhoto(imageBase64)
-        :null
-
-    const comment=await this.commentRepository.createForWorkflowStep(taskId,workflowStepId,userId,message??"",imageUrl,parentId)
-
+    const imageUrl = imageBase64
+      ? await this.uploadCommentPhoto(imageBase64)
+      : null
+    const attachment = file?.base64
+      ? await this.uploadCommentAttachment(file.base64, file.name, file.mime)
+      : null
+    const comment = await this.commentRepository.createForWorkflowStep(
+      taskId, workflowStepId, userId, message ?? "", imageUrl, parentId, attachment,
+    )
     this.realtime.publish({
-      entity:"COMMENT",
-      action:"CREATED",
-      id:comment.id,
-      payload:comment,
-      excludeUserId:userId,
+      entity: "COMMENT", action: "CREATED", id: comment.id,
+      payload: comment, excludeUserId: userId,
     })
-
+    const notifyMsg =
+      comment.message?.trim() ||
+      (attachment ? `📎 ${attachment.name}` : "") ||
+      (imageUrl ? "📷 Foto" : "")
     this.fireNotifyComment(
-      { id:comment.id, taskId:comment.taskId!, projectId:null, workflowStepId, message:comment.message, hasImage:!!imageUrl },
+      {
+        id: comment.id, taskId: comment.taskId!, projectId: null,
+        workflowStepId: comment.workflowStepId, message: notifyMsg,
+        hasImage: !!imageUrl || !!attachment,
+      },
       userId,
     )
-
     return comment
   }
 
-  async createForProject(projectId:string,message:string|undefined,userId:string,imageBase64?:string,parentId?:string){
-
-    if(!message?.trim()&&!imageBase64){
-      throw new BadRequestException("El comentario necesita texto o una foto.")
+  async createForProject(
+    projectId: string,
+    message: string | undefined,
+    userId: string,
+    imageBase64?: string,
+    parentId?: string,
+    file?: { base64: string; name?: string; mime?: string },
+  ) {
+    if (!message?.trim() && !imageBase64 && !file?.base64) {
+      throw new BadRequestException(
+        "El comentario necesita texto, una foto o un archivo (PDF/DXF).",
+      )
     }
-
-    if(parentId){
-      await this.assertSameContext(parentId,{ projectId })
+    if (parentId) {
+      await this.assertSameContext(parentId, { projectId })
     }
-
-    const imageUrl=
-      imageBase64
-        ?await this.uploadCommentPhoto(imageBase64)
-        :null
-
-    const comment=await this.commentRepository.createForProject(projectId,userId,message??"",imageUrl,parentId)
-
+    const imageUrl = imageBase64
+      ? await this.uploadCommentPhoto(imageBase64)
+      : null
+    const attachment = file?.base64
+      ? await this.uploadCommentAttachment(file.base64, file.name, file.mime)
+      : null
+    const comment = await this.commentRepository.createForProject(
+      projectId, userId, message ?? "", imageUrl, parentId, attachment,
+    )
     this.realtime.publish({
-      entity:"COMMENT",
-      action:"CREATED",
-      id:comment.id,
-      payload:comment,
-      excludeUserId:userId,
+      entity: "COMMENT", action: "CREATED", id: comment.id,
+      payload: comment, excludeUserId: userId,
     })
-
-    // Antes NO se notificaba acá porque el modelo Notification exigía
-    // taskId obligatorio. Ahora taskId/projectId son mutuamente
-    // excluyentes (igual que en Comment), así que un comentario de
-    // proyecto con @mención genera notificación como cualquier otro.
+    const notifyMsg =
+      comment.message?.trim() ||
+      (attachment ? `📎 ${attachment.name}` : "") ||
+      (imageUrl ? "📷 Foto" : "")
     this.fireNotifyComment(
-      { id:comment.id, taskId:null, projectId:comment.projectId!, workflowStepId:null, message:comment.message, hasImage:!!imageUrl },
+      {
+        id: comment.id, taskId: null, projectId: comment.projectId!,
+        workflowStepId: null, message: notifyMsg,
+        hasImage: !!imageUrl || !!attachment,
+      },
       userId,
     )
-
     return comment
   }
+
 
   async update(id:string,message:string,userId:string){
 

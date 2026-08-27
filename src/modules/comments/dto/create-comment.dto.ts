@@ -1,25 +1,32 @@
 import { IsOptional, IsString, MaxLength } from "class-validator"
 
-export class CreateCommentDto{
-
-  // Opcional ahora: un comentario puede ser solo una foto, sin
-  // texto — la validación de "al menos uno de los dos" (mensaje o
-  // foto) vive en el service, no acá.
+export class CreateCommentDto {
   @IsOptional()
   @IsString()
   @MaxLength(5000)
-  message?:string
+  message?: string
+
+  /** Foto (data URI / base64). Se comprime a WebP. */
+  @IsOptional()
+  @IsString()
+  imageBase64?: string
+
+  /** PDF / DXF / archivo (data URI o base64 plano). */
+  @IsOptional()
+  @IsString()
+  fileBase64?: string
 
   @IsOptional()
   @IsString()
-  imageBase64?:string
+  @MaxLength(255)
+  fileName?: string
 
-  // Presente = este comentario es una respuesta a otro. El service
-  // valida que el parent exista y pertenezca al mismo contexto
-  // (tarea/proyecto/step) antes de guardar — acá solo se valida la
-  // forma.
   @IsOptional()
   @IsString()
-  parentId?:string
+  @MaxLength(120)
+  fileMime?: string
 
+  @IsOptional()
+  @IsString()
+  parentId?: string
 }

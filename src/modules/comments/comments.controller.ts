@@ -49,7 +49,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForTask(taskId,dto.message,user.id,dto.imageBase64,dto.parentId)
+    return this.commentsService.createForTask(taskId,dto.message,user.id,dto.imageBase64,dto.parentId,dto.fileBase64?{base64:dto.fileBase64,name:dto.fileName,mime:dto.fileMime}:undefined)
   }
 
   // ---- Nivel Proceso (WorkflowStep) ----
@@ -74,7 +74,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64,dto.parentId)
+    return this.commentsService.createForWorkflowStep(workflowStepId,dto.message,user.id,dto.imageBase64,dto.parentId,dto.fileBase64?{base64:dto.fileBase64,name:dto.fileName,mime:dto.fileMime}:undefined)
   }
 
   // ---- Nivel Proyecto ----
@@ -97,7 +97,7 @@ export class CommentsController {
     @Body() dto:CreateCommentDto,
     @CurrentUser() user:CurrentUserType,
   ){
-    return this.commentsService.createForProject(projectId,dto.message,user.id,dto.imageBase64,dto.parentId)
+    return this.commentsService.createForProject(projectId,dto.message,user.id,dto.imageBase64,dto.parentId,dto.fileBase64?{base64:dto.fileBase64,name:dto.fileName,mime:dto.fileMime}:undefined)
   }
 
   // ---- Compartido ----

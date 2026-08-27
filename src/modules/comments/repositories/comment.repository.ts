@@ -70,6 +70,7 @@ export class CommentRepository {
     message: string,
     imageUrl?: string | null,
     parentId?: string | null,
+    attachment?: { url: string; name: string; mime: string } | null,
   ) {
     return this.prisma.comment.create({
       data: {
@@ -79,6 +80,9 @@ export class CommentRepository {
         workflowStepId: null,
         imageUrl,
         parentId,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentMime: attachment?.mime ?? null,
       },
       include: commentInclude,
     })
@@ -91,6 +95,7 @@ export class CommentRepository {
     message: string,
     imageUrl?: string | null,
     parentId?: string | null,
+    attachment?: { url: string; name: string; mime: string } | null,
   ) {
     return this.prisma.comment.create({
       data: {
@@ -100,6 +105,9 @@ export class CommentRepository {
         message: message.trim(),
         imageUrl,
         parentId,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentMime: attachment?.mime ?? null,
       },
       include: commentInclude,
     })
@@ -111,6 +119,7 @@ export class CommentRepository {
     message: string,
     imageUrl?: string | null,
     parentId?: string | null,
+    attachment?: { url: string; name: string; mime: string } | null,
   ) {
     return this.prisma.comment.create({
       data: {
@@ -119,6 +128,9 @@ export class CommentRepository {
         message: message.trim(),
         imageUrl,
         parentId,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentMime: attachment?.mime ?? null,
       },
       include: commentInclude,
     })

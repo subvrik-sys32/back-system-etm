@@ -196,6 +196,10 @@ model Comment {
   userId         String
   message        String
   imageUrl       String?
+  /// PDF / DXF / archivo no imagen (URL pública storage)
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentMime String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   deletedAt      DateTime?
