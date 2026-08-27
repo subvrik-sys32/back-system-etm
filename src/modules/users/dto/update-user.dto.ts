@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -42,8 +43,10 @@ export class UpdateUserDto {
   roleIds?: string[]
 
   @IsOptional()
-  @IsEnum(JobLevel)
-  level?: JobLevel
+  // IsIn explícito: no depender solo del enum Prisma generado
+  // (si el deploy no corrió migrate/generate, TERCERO aún llega bien).
+  @IsIn(["GENERAL", "OPERARIO", "SUPERVISOR", "TERCERO"])
+  level?: JobLevel | "GENERAL" | "OPERARIO" | "SUPERVISOR" | "TERCERO"
 
   // Array vacío = "limpiar todas las áreas", undefined = "no
   // tocar" (mismo criterio que level arriba) — antes era un solo
