@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "JobLevel" ADD VALUE IF NOT EXISTS 'TERCERO';

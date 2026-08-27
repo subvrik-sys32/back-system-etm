@@ -89,7 +89,7 @@ export class UsersService {
         // persisten.
         areas: {
           connect:
-            targetLevel === JobLevel.OPERARIO && dto.areaIds
+            (targetLevel === JobLevel.OPERARIO || targetLevel === JobLevel.TERCERO) && dto.areaIds
               ? dto.areaIds.map(id => ({ id }))
               : [],
         },
@@ -188,7 +188,11 @@ export class UsersService {
 
     let areasUpdate: { set: { id: string }[] } | undefined
 
-    if (effectiveLevel !== JobLevel.OPERARIO) {
+    const levelKeepsAreas =
+      effectiveLevel === JobLevel.OPERARIO ||
+      effectiveLevel === JobLevel.TERCERO
+
+    if (!levelKeepsAreas) {
       areasUpdate = { set: [] }
     } else if (dto.areaIds !== undefined) {
       areasUpdate = { set: dto.areaIds.map(id => ({ id })) }
@@ -298,7 +302,7 @@ export class UsersService {
   // Si mañana se suma un departamento más con sub-niveles, este es
   // el único lugar a tocar.
   private static readonly LEVELS_BY_ROLE: Record<string, JobLevel[]> = {
-    PRODUCCION: [JobLevel.OPERARIO, JobLevel.SUPERVISOR],
+    PRODUCCION: [JobLevel.OPERARIO, JobLevel.SUPERVISOR, JobLevel.TERCERO],
     INGENIERIA: [JobLevel.SUPERVISOR],
     PROYECTOS: [JobLevel.SUPERVISOR],
   }
@@ -369,9 +373,9 @@ export class UsersService {
       return
     }
 
-    if (level !== JobLevel.OPERARIO) {
+    if (level !== JobLevel.OPERARIO && level !== JobLevel.TERCERO) {
       throw new BadRequestException(
-        "Las áreas solo aplican para usuarios con sub-nivel OPERARIO",
+        "Las áreas solo aplican para usuarios con sub-nivel OPERARIO o TERCERO",
       )
     }
 

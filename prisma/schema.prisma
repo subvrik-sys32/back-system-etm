@@ -13,6 +13,7 @@ enum JobLevel {
   GENERAL
   OPERARIO
   SUPERVISOR
+  TERCERO
 }
 
 // Área de trabajo dentro de un departamento (hoy: las 6 de
