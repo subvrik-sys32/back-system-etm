@@ -447,6 +447,8 @@ model WorkflowStep {
   taskId            String
   processCode       ProcessCode
   status            WorkflowStatus
+  /// Planta vs externalizado. Operador TERCERO usa operatorId; ExternalParty es fase 3.
+  execution         StepExecution  @default(IN_HOUSE)
   order             Int
   startedAt         DateTime?
   completedAt       DateTime?
@@ -540,6 +542,12 @@ enum WorkflowStatus {
   PAUSED
   COMPLETED
   REVIEWED
+}
+
+/// IN_HOUSE = planta. OUTSOURCED = taller externo (operador TERCERO u org futura).
+enum StepExecution {
+  IN_HOUSE
+  OUTSOURCED
 }
 
 enum DayShift {

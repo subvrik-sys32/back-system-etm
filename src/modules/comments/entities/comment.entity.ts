@@ -67,6 +67,9 @@ export const myCommentInclude = {
       id: true,
       projectCode: true,
       name: true,
+      status: {
+        select: { code: true },
+      },
     },
   },
   workflowStep: {

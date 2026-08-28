@@ -1,0 +1,37 @@
+diff --git a/prisma/migrations/20260828120000_step_execution/migration.sql b/prisma/migrations/20260828120000_step_execution/migration.sql
+new file mode 100644
+index 0000000..74c7004
+--- /dev/null
++++ b/prisma/migrations/20260828120000_step_execution/migration.sql
+@@ -0,0 +1,5 @@
++-- CreateEnum
++CREATE TYPE "StepExecution" AS ENUM ('IN_HOUSE', 'OUTSOURCED');
++
++-- AlterTable
++ALTER TABLE "WorkflowStep" ADD COLUMN "execution" "StepExecution" NOT NULL DEFAULT 'IN_HOUSE';
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index bfa92fd..968321e 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -447,6 +447,8 @@ model WorkflowStep {
+   taskId            String
+   processCode       ProcessCode
+   status            WorkflowStatus
++  /// Planta vs externalizado. Operador TERCERO usa operatorId; ExternalParty es fase 3.
++  execution         StepExecution  @default(IN_HOUSE)
+   order             Int
+   startedAt         DateTime?
+   completedAt       DateTime?
+@@ -542,6 +544,12 @@ enum WorkflowStatus {
+   REVIEWED
+ }
+ 
++/// IN_HOUSE = planta. OUTSOURCED = taller externo (operador TERCERO u org futura).
++enum StepExecution {
++  IN_HOUSE
++  OUTSOURCED
++}
++
+ enum DayShift {
+   MORNING_1
+   MORNING_2

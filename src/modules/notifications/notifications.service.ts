@@ -40,15 +40,19 @@ export class NotificationsService{
     notification:NotificationWithRelations,
   ){
 
-    // Los comentarios de proyecto no tienen tarea (`task` es null acá):
-    // no hay noción de "historial" que aplique, así que directamente
-    // no son históricas.
-    const history=
-      !!notification.task &&
-      notification.task.workflowSteps.length>0 &&
-      notification.task.workflowSteps.every(
-        step=>step.status==="REVIEWED",
-      )
+    // Tarea: todos los steps REVIEWED.
+    // Proyecto puro (sin task): status COMPLETED → histórico (confirm inline).
+    const task = notification.task
+    const project = notification.project
+    const taskHistorical =
+      !!task &&
+      task.workflowSteps.length > 0 &&
+      task.workflowSteps.every(step => step.status === "REVIEWED")
+    const projectHistorical =
+      !task &&
+      (project as { status?: { code?: string } } | null)?.status?.code ===
+        "COMPLETED"
+    const history = taskHistorical || projectHistorical
 
     return{
 

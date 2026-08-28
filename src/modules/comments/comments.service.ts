@@ -45,13 +45,19 @@ export class CommentsService{
       const workflowStep = comment.workflowStep
       const project = comment.project ?? task?.project ?? null
 
-      const history =
+      // Tarea: todos los steps REVIEWED. Proyecto puro: status COMPLETED.
+      const taskHistorical =
         !!task &&
         Array.isArray(task.workflowSteps) &&
         task.workflowSteps.length > 0 &&
         task.workflowSteps.every(
           (step: { status: string }) => step.status === "REVIEWED",
         )
+      const projectHistorical =
+        !task &&
+        (project as { status?: { code?: string } } | null)?.status?.code ===
+          "COMPLETED"
+      const history = taskHistorical || projectHistorical
 
       const route = {
         module: workflowStep
