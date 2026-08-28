@@ -175,6 +175,7 @@ export class WorkflowService {
     const patch: Record<string, unknown> = {
       ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
       ...(dto.coOperatorIds !== undefined && { coOperatorIds: dto.coOperatorIds }),
+      ...(dto.execution !== undefined && { execution: dto.execution }),
       ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
       ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
       ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
