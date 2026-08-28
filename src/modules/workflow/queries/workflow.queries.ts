@@ -19,6 +19,8 @@ export async function getStepForUpdate(
 
         status:true,
 
+        execution:true,
+
         operatorId:true,
 
         // Para limpiar convocatoria previa al reasignar desde la fila

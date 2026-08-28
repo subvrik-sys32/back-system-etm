@@ -173,9 +173,9 @@ export class WorkflowService {
         prevCos.some(id => !nextCos.includes(id)))
 
     const patch: Record<string, unknown> = {
+      ...(dto.execution !== undefined && { execution: dto.execution }),
       ...(dto.operatorId !== undefined && { operatorId: dto.operatorId }),
       ...(dto.coOperatorIds !== undefined && { coOperatorIds: dto.coOperatorIds }),
-      ...(dto.execution !== undefined && { execution: dto.execution }),
       ...(dto.piecesOutput !== undefined && { piecesOutput: dto.piecesOutput }),
       ...(dto.plRtReal !== undefined && { plRtReal: dto.plRtReal }),
       ...(dto.paintKgReal !== undefined && { paintKgReal: dto.paintKgReal }),
